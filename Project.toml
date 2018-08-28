@@ -1,0 +1,15 @@
+name = "MPM"
+uuid = "910b01de-a763-11e8-2053-7f7fac9f2f56"
+authors = ["Keita Nakamura <keita.nakamura.1109@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+TensorArrays = "a7b94886-9ba7-11e8-2223-b1746dc0c910"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
