@@ -8,15 +8,9 @@ abstract type AbstractParticle{T <: Real} <: AbstractVector{T} end
 end
 
 function generateparticles(f::Function, domain::AbstractMatrix{<: Real}, nparts::Vararg{Int, dim}) where {dim}
-    axes = generateaxes(domain, nparts)
-    map(CartesianIndices(length.(axes))) do cartesian
-        coord = ntuple(Val(dim)) do i
-            @inbounds begin
-                ax = axes[i]
-                idx = cartesian[i]
-                return ax[idx]
-            end
-        end
+    axs = generateaxs(domain, nparts)
+    map(CartesianIndices(length.(axs))) do cartesian
+        coord = map((ax, i) -> (@inboundsret ax[i]), axs, Tuple(cartesian))
         return f(Vec{dim}(coord))::AbstractParticle
     end
 end

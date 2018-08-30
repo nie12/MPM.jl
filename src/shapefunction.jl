@@ -1,6 +1,4 @@
 # 1D shape function defined in the global coordinate system
-# `l` must be unique in the axis for now.
-# Should define `l₊` and `l₋` instead of `l` to represent nonlinear spaces?
 struct ShapeFunction{T <: Real}
     xi::T
     l::T

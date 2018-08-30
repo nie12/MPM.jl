@@ -1,27 +1,18 @@
+# Grid just store the axis informations instead of generating nodes,
+# which may be good for huge grid. But not sure that generating node every time
+# when `getindex` is used is high cost or not.
 struct Grid{dim, T <: Real} <: AbstractArray{Node{dim, T}, dim}
-    nodes::Array{Node{dim, T}, dim}
+    axs::NTuple{dim, StepRangeLen{T, Base.TwicePrecision{T}, Base.TwicePrecision{T}}}
 end
 
-Base.IndexStyle(::Type{<: Grid}) = IndexLinear()
+Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
 
-@inline Base.size(grid::Grid) = size(grid.nodes)
-@propagate_inbounds @inline Base.getindex(grid::Grid, i::Int) = grid.nodes[i]
-
-function generategrid(domain::AbstractMatrix{<: Real}, nelts::Vararg{Int, dim}) where {dim}
-    axes = generateaxes(domain, map(i -> i + 1, nelts))
-    return generategrid(axes...)
+@inline Base.size(grid::Grid) = map(length, grid.axs)
+@propagate_inbounds @inline function Base.getindex(grid::Grid{dim}, cartesian::Vararg{Int, dim}) where {dim}
+    Node(map((ax, i) -> ShapeFunction(ax[i], step(ax)), grid.axs, cartesian))
 end
 
-function generategrid(axes::Vararg{StepRangeLen, dim}) where {dim}
-    nodes = map(CartesianIndices(length.(axes))) do cartesian
-        shapes = ntuple(Val(dim)) do i
-            @inbounds begin
-                ax = axes[i]
-                idx = cartesian[i]
-                return ShapeFunction(ax[idx], step(ax))
-            end
-        end
-        return Node(shapes)
-    end
-    return Grid(nodes)
+@inline function generategrid(domain::AbstractMatrix{<: Real}, nelts::Vararg{Int})
+    Grid(generateaxs(domain, map(i -> i + 1, nelts)))
 end
+
