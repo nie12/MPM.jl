@@ -7,9 +7,13 @@ abstract type AbstractParticle{T <: Real} <: AbstractVector{T} end
     setfield!(p, name, getfield(p, name) + dx)
 end
 
-function generateparticles(f::Function, domain::AbstractMatrix{<: Real}, nparts::Vararg{Int, dim}) where {dim}
-    axs = generateaxs(domain, nparts)
-    map(CartesianIndices(length.(axs))) do cartesian
+function generateparticles(f::Function,
+                           domain::AbstractMatrix{<: Real},
+                           nparts::Vararg{Int, dim};
+                           fillbounds::Bool = false) where {dim}
+    axs = generateaxs(domain, fillbounds == true ? nparts : map(i->i+2, nparts))
+    sz = map(len -> fillbounds == true ? (1:len) : (2:len-1), length.(axs))
+    map(CartesianIndices(sz)) do cartesian
         coord = map((ax, i) -> (@inboundsret ax[i]), axs, Tuple(cartesian))
         return f(Vec{dim}(coord))::AbstractParticle
     end
