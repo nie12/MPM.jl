@@ -13,5 +13,6 @@ include("particle.jl")
 include("shapefunction.jl")
 include("node.jl")
 include("grid.jl")
+include("exterpolate.jl")
 
 end # module

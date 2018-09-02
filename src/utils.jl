@@ -12,7 +12,13 @@ function generateaxs(domain::AbstractMatrix{<: Real}, axsize::NTuple{dim, Int}) 
             start = domain[i,1]
             stop = domain[i,2]
             @assert start < stop
-            return range(start, stop = stop, length = axsize[i])
+            return LinRange(start, stop, axsize[i])
         end
     end
 end
+
+@inline function connectivity(eltindex::Tuple{Vararg{Int}})
+    CartesianIndices(map(start -> start:start+1, eltindex))
+end
+@inline connectivity(eltindex::Vararg{Int}) = connectivity(eltindex)
+@inline connectivity(eltindex::CartesianIndex) = connectivity(Tuple(eltindex))

@@ -10,7 +10,7 @@ end
 end
 
 @inline Base.size(::Node{dim}) where {dim} = (dim,)
-@propagate_inbounds @inline Base.getindex(node::Node, i::Int) = node.shapes[i].xi
+@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.shapes[i].xi
 @inline steps(node::Node{dim}) where {dim} = ntuple(i -> @inboundsret(step(node.shapes[i])), Val(dim))
 
 @inline function shape_value(node::Node{dim}, x::Vec{dim}) where {dim}

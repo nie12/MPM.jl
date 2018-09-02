@@ -1,7 +1,7 @@
 abstract type AbstractParticle{T <: Real} <: AbstractVector{T} end
 
 @inline Base.size(p::AbstractParticle) = size(p.x)
-@propagate_inbounds @inline Base.getindex(p::AbstractParticle, i::Int) = p.x[i]
+@inline @propagate_inbounds Base.getindex(p::AbstractParticle, i::Int) = p.x[i]
 
 @inline function update!(p::AbstractParticle, ::Val{name}, dx) where {name}
     setfield!(p, name, getfield(p, name) + dx)
@@ -27,7 +27,6 @@ mutable struct SimpleParticle{dim, T, L, Ls} <: AbstractParticle{T}
     v  :: Vec{dim, T}                    # velocity
     F  :: Tensor{2, dim, T, L}           # deformation gradient
     σ  :: SymmetricTensor{2, dim, T, Ls} # stress
-    ϵ  :: SymmetricTensor{2, dim, T, Ls} # strain
 end
 
 @generated function SimpleParticle(; x::Vec{dim, <: Real},
@@ -35,11 +34,10 @@ end
                                      V₀::Real,
                                      v::Vec{dim, <: Real} = zero(x),
                                      F::Tensor{2, dim, <: Real, L} = one(x ⊗ x),
-                                     σ::SymmetricTensor{2, dim, <: Real, Ls} = zero(symmetric(F)),
-                                     ϵ::SymmetricTensor{2, dim, <: Real, Ls} = zero(symmetric(F))) where {dim, L, Ls}
-    T = promote_type(eltype.((x, m, v, V₀, F, σ, ϵ))...)
+                                     σ::SymmetricTensor{2, dim, <: Real, Ls} = zero(symmetric(F))) where {dim, L, Ls}
+    T = promote_type(eltype.((x, m, v, V₀, F, σ))...)
     return quote
         @_inline_meta
-        SimpleParticle{dim, $T, L, Ls}(x, m, V₀, v, F, σ, ϵ)
+        SimpleParticle{dim, $T, L, Ls}(x, m, V₀, v, F, σ)
     end
 end
