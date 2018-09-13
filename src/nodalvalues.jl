@@ -3,12 +3,13 @@ struct NodalValues{dim, T, L} <: AbstractArray{T, dim}
     data::NTuple{L, T}
 end
 
-@generated function NodalValues(f::Function, grid::Grid{dim}, p::AbstractParticle) where {dim}
-    exps = [:(f(grid[conn[$i]], p)) for i in 1:2^dim]
+@generated function NodalValues(f::Function, grid::Grid{dim}, p::Union{Vec{dim}, Particle{dim}}) where {dim}
     return quote
+        @_inline_meta
         eltindex = whichelement(grid, p)
         conn = connectivity(eltindex)
-        return NodalValues(eltindex, tuple($(exps...)))
+        @boundscheck checkbounds(grid, conn)
+        @inbounds return NodalValues(eltindex, @ntuple $(2^dim) i -> f(grid[conn[i]], p))
     end
 end
 
