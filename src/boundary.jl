@@ -16,6 +16,6 @@ for BoundaryType in (:BoundaryVelocity, :BoundaryForce)
         @inline function $BoundaryType(f::Function, nodes::AbstractArray{<: Node})
             $BoundaryType(f, vec(Int[node.id for node in nodes]))
         end
-        @inline Base.eachindex(b::$BoundaryType) = b.nodeinds
+        @inline nodeindices(b::$BoundaryType) = b.nodeinds
     end
 end

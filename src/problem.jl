@@ -1,15 +1,16 @@
 struct Problem{dim, T <: Real, M, Ms}
     grid::Grid{dim, T}
     particles::Vector{Particle{dim, T, M, Ms}}
+    gravity::Vec{dim, T}
     bvels::Vector{BoundaryVelocity}
     bforces::Vector{BoundaryForce}
 end
 
-function Problem(grid::Grid{dim, T}, particles::AbstractArray{<: Particle}) where {dim, T}
+function Problem(grid::Grid{dim, T}, particles::AbstractArray{<: Particle{dim, T}}; gravity::Real = T(9.80665)) where {dim, T}
     for (i,p) in enumerate(particles)
         p.id = i
     end
-    Problem(grid, vec(particles), BoundaryVelocity[], BoundaryForce[])
+    Problem(grid, vec(particles), Vec{dim, T}(i -> i == dim ? -T(gravity) : zero(T)), BoundaryVelocity[], BoundaryForce[])
 end
 
 Base.push!(prob::Problem, bvel::BoundaryVelocity) = push!(prob.bvels, bvel)
@@ -38,7 +39,7 @@ function update_stress_first!(update_stress!::Function, prob::Problem, Δt::Real
     Modify nodal velocity for Dirichlet boundary condition
     =#
     for bc in prob.bvels
-        @inbounds for i in eachindex(bc)
+        @inbounds for i in nodeindices(bc)
             v = bc.v(grid[i])
             grid.v[i] = v
             grid.mv[i] = grid.m[i] * v
@@ -52,15 +53,19 @@ function update_stress_first!(update_stress!::Function, prob::Problem, Δt::Real
         p.L = sum(NodalValues((node,p) -> node.v ⊗ node.N'(p), grid, p))
         p.F = (I + Δt*p.L) ⋅ p.F
         update_stress!(p, Δt)
-        fintᵢ = NodalValues((node,p) -> -(det(p.F)*p.V₀) * p.σ ⋅ node.N'(p), grid, p)
+        fintᵢ = NodalValues((node,p) -> (-det(p.F)*p.V₀) * p.σ ⋅ node.N'(p), grid, p)
         @inbounds add!(grid.f, fintᵢ)
     end
 
     #=
-    Add external nodal force for Neumann boundary condition
+    Add external nodal force for gravity and Neumann boundary condition
     =#
+    for p in particles
+        fextᵢ = NodalValues((node,p) -> node.N(p)*p.m*prob.gravity, grid, p)
+        @inbounds add!(grid.f, fextᵢ)
+    end
     for bc in prob.bforces
-        @inbounds for i in eachindex(bc)
+        @inbounds for i in nodeindices(bc)
             grid.f[i] += bc.f(grid[i])
         end
     end
@@ -70,7 +75,7 @@ function update_stress_first!(update_stress!::Function, prob::Problem, Δt::Real
     (assume that acceleration is zero)
     =#
     for bc in prob.bvels
-        @inbounds for i in eachindex(bc)
+        @inbounds for i in nodeindices(bc)
             grid.f[i] = zero(grid.f[i])
         end
     end

@@ -27,10 +27,11 @@ end
 end
 
 function generateparticles(f::Function,
-                           domain::AbstractMatrix{T},
+                           domain::AbstractMatrix{<: Real},
                            nparts::Vararg{Int, dim};
-                           fillbounds::Bool = false) where {T, dim}
+                           fillbounds::Bool = false) where {dim}
     axs = generateaxs(domain, fillbounds == true ? nparts : map(i->i+2, nparts))
+    T = eltype(eltype(axs))
     sz = map(len -> fillbounds == true ? (1:len) : (2:len-1), length.(axs))
     map(CartesianIndices(sz)) do cartesian
         coord = map((ax, i) -> (@inboundsret ax[i]), axs, Tuple(cartesian))

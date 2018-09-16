@@ -2,7 +2,7 @@
 `Grid` is a subtype of `AbstractArray` which stores nodes with linear nodal spacing.
 See `generategrid` to construct `Grid` type.
 """
-struct Grid{dim, T <: Real} <: AbstractArray{Node{dim, T}, dim}
+struct Grid{dim, T} <: AbstractArray{Node{dim, T}, dim}
     axs::NTuple{dim, LinRange{T}}
     m::Array{T, dim}
     v::Array{Vec{dim, T}, dim}
@@ -45,9 +45,11 @@ julia> generategrid([0 1; 0 2], 2, 4)
  [1.0, 0.0]  [1.0, 0.5]  [1.0, 1.0]  [1.0, 1.5]  [1.0, 2.0]
 ```
 """
-function generategrid(domain::AbstractMatrix{T}, nelts::Vararg{Int, dim}) where {T, dim}
+function generategrid(domain::AbstractMatrix{<: Real}, nelts::Vararg{Int, dim}) where {dim}
     nnodes = map(i -> i + 1, nelts)
-    Grid(generateaxs(domain, nnodes),
+    axs = generateaxs(domain, nnodes)
+    T = eltype(eltype(axs))
+    Grid(axs,
          fill(zero(T), nnodes),
          fill(zero(Vec{dim, T}), nnodes),
          fill(zero(Vec{dim, T}), nnodes),
