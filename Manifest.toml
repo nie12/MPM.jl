@@ -9,9 +9,9 @@ version = "0.8.10"
 
 [[BinaryProvider]]
 deps = ["Libdl", "Pkg", "SHA", "Test"]
-git-tree-sha1 = "b530fbeb6f41ab5a83fbe3db1fcbe879334bcd2d"
+git-tree-sha1 = "48c147e63431adbcee69bc40b04c3f0fec0a4982"
 uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
-version = "0.4.2"
+version = "0.5.0"
 
 [[CommonSubexpressions]]
 deps = ["Test"]
@@ -125,10 +125,10 @@ deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[SpecialFunctions]]
-deps = ["BinDeps", "BinaryProvider", "Compat", "Libdl"]
-git-tree-sha1 = "d12f8917be3782f4b800ba16003b8d0d4858c2e5"
+deps = ["BinDeps", "BinaryProvider", "Libdl", "Test"]
+git-tree-sha1 = "c35c9c76008babf4d658060fc64aeb369a41e7bd"
 uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
-version = "0.7.0"
+version = "0.7.1"
 
 [[StaticArrays]]
 deps = ["InteractiveUtils", "LinearAlgebra", "Random", "Statistics", "Test"]
@@ -142,7 +142,7 @@ uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[TensorArrays]]
 deps = ["ForwardDiff", "LinearAlgebra", "MacroTools", "StaticArrays", "Statistics"]
-git-tree-sha1 = "ad7db1535a00d4ca4585f915fb329203d14ec8da"
+git-tree-sha1 = "ade4fc3236d77b74c52a35a557762eb1ac2220cf"
 repo-rev = "master"
 repo-url = "https://github.com/KeitaNakamura/TensorArrays.jl.git"
 uuid = "a7b94886-9ba7-11e8-2223-b1746dc0c910"

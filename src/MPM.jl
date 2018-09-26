@@ -7,7 +7,8 @@ using TensorArrays
 
 export Node, Grid, Particle
 export Problem, BoundaryVelocity, BoundaryForce
-export generategrid, generateparticles
+export USF
+export generategrid, generateparticles, solve
 
 include("utils.jl")
 include("particle.jl")
@@ -17,5 +18,7 @@ include("grid.jl")
 include("nodalvalues.jl")
 include("boundary.jl")
 include("problem.jl")
+include("algorithms.jl")
+include("solution.jl")
 
 end # module

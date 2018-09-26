@@ -27,3 +27,6 @@ Base.IndexStyle(::Type{<: NodalValues}) = IndexLinear()
         A[conn[i]] += nv[i]
     end
 end
+
+@inline Base.:+(nv::NodalValues) = nv
+@inline Base.:-(nv::NodalValues) = NodalValues(nv.eltindex, map(-, nv.data))
