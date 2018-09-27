@@ -26,6 +26,7 @@ function gausspoints(::Type{T}, ::Val{3}) where {T <: Real}
             Vec{3}((-v,  v,  v)))
 end
 
+include("particle.jl")
 include("shapefunction.jl")
 include("node.jl")
 include("grid.jl")

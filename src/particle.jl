@@ -1,4 +1,4 @@
-mutable struct Particle{dim, T, M, Ms} <: AbstractVector{T}
+mutable struct Particle{dim, T, M, Ms}
     x  :: Vec{dim, T}                    # coordinate
     m  :: T                              # mass
     V₀ :: T                              # initial volume
@@ -6,16 +6,6 @@ mutable struct Particle{dim, T, M, Ms} <: AbstractVector{T}
     L  :: Tensor{2, dim, T, M}           # velocity gradient
     F  :: Tensor{2, dim, T, M}           # deformation gradient
     σ  :: SymmetricTensor{2, dim, T, Ms} # stress
-end
-
-@inline Base.size(p::Particle) = size(p.x)
-@inline @propagate_inbounds Base.getindex(p::Particle, i::Int) = p.x[i]
-
-@generated function Base.convert(::Type{Particle{dim, T}}, p::Particle{dim, U, M, Ms}) where {dim, T, U, M, Ms}
-    return quote
-        @_inline_meta
-        Particle{dim, T, M, Ms}((@ntuple $(fieldcount(p)) i -> getfield(p, i))...)
-    end
 end
 
 @generated function Particle(; x::Vec{dim, <: Real},
@@ -32,6 +22,14 @@ end
     end
 end
 
+@generated function Base.convert(::Type{Particle{dim, T}}, p::Particle{dim, U, M, Ms}) where {dim, T, U, M, Ms}
+    exps = [:(p.$name) for name in fieldnames(Particle)]
+    return quote
+        @_inline_meta
+        Particle{dim, T, M, Ms}($(exps...))
+    end
+end
+
 function generateparticles(f::Function,
                            domain::AbstractMatrix{<: Real},
                            nparts::Vararg{Int, dim};
@@ -43,5 +41,57 @@ function generateparticles(f::Function,
         p = f(coord)
         T = eltype(eltype(axs))
         return convert(Particle{dim, T}, p)
+    end
+end
+
+@inline Base.:+(p::Particle) = p
+@generated function Base.:-(p::Particle)
+    exps = [:(-p.$name) for name in fieldnames(Particle)]
+    return quote
+        @_inline_meta
+        Particle($(exps...))
+    end
+end
+
+for op in (:+, :-)
+    @eval @generated function Base.$op(x::Particle, y::Particle)
+        exps = [:($($op)(x.$name, y.$name)) for name in fieldnames(Particle)]
+        return quote
+            @_inline_meta
+            Particle($(exps...))
+        end
+    end
+end
+
+for op in (:*, :/)
+    @eval @generated function Base.$op(p::Particle, x::Real)
+        exps = [:($($op)(p.$name, x)) for name in fieldnames(Particle)]
+        return quote
+            @_inline_meta
+            Particle($(exps...))
+        end
+    end
+end
+@generated function Base.:*(x::Real, p::Particle)
+    exps = [:(x * p.$name) for name in fieldnames(Particle)]
+    return quote
+        @_inline_meta
+        Particle($(exps...))
+    end
+end
+
+@generated function Base.:(==)(x::Particle, y::Particle)
+    exps = [:(x.$name == y.$name) for name in fieldnames(Particle)]
+    return quote
+        @_inline_meta
+        *($(exps...))
+    end
+end
+
+@generated function Base.isapprox(x::Particle, y::Particle; kwargs...)
+    exps = [:(isapprox(x.$name, y.$name; kwargs...)) for name in fieldnames(Particle)]
+    return quote
+        @_inline_meta
+        *($(exps...))
     end
 end
