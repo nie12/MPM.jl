@@ -1,7 +1,7 @@
 mutable struct Particle{dim, T, M, Ms}
     x  :: Vec{dim, T}                    # coordinate
+    ρ₀ :: T                              # initial density
     m  :: T                              # mass
-    V₀ :: T                              # initial volume
     v  :: Vec{dim, T}                    # velocity
     L  :: Tensor{2, dim, T, M}           # velocity gradient
     F  :: Tensor{2, dim, T, M}           # deformation gradient
@@ -9,16 +9,16 @@ mutable struct Particle{dim, T, M, Ms}
 end
 
 @generated function Particle(; x::Vec{dim, <: Real},
-                               m::Real,
-                               V₀::Real,
+                               ρ₀::Real,
+                               m::Real = NaN,
                                v::Vec{dim, <: Real} = zero(x),
                                L::Tensor{2, dim, <: Real, M} = zero(x ⊗ x),
                                F::Tensor{2, dim, <: Real, M} = one(L),
                                σ::SymmetricTensor{2, dim, <: Real, Ms} = zero(symmetric(L))) where {dim, M, Ms}
-    T = promote_type(eltype.((x, m, v, V₀, L, F, σ))...)
+    T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ))...)
     return quote
         @_inline_meta
-        Particle{dim, $T, M, Ms}(x, m, V₀, v, L, F, σ)
+        Particle{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ)
     end
 end
 
@@ -36,12 +36,19 @@ function generateparticles(f::Function,
                            fillbounds::Bool = false) where {dim}
     axs = generateaxs(domain, fillbounds == true ? nparts : map(i->i+2, nparts))
     sz = map(len -> fillbounds == true ? (1:len) : (2:len-1), length.(axs))
-    map(CartesianIndices(sz)) do cartesian
+    particles = map(CartesianIndices(sz)) do cartesian
         coord = Vec(getindex.(axs, Tuple(cartesian)))
         p = f(coord)
         T = eltype(eltype(axs))
         return convert(Particle{dim, T}, p)
     end
+    V = prod(domain[:,2] - domain[:,1])
+    np = length(particles)
+    Vₚ = V / np
+    for p in particles
+        p.m = p.ρ₀ * Vₚ
+    end
+    return particles
 end
 
 @inline Base.:+(p::Particle) = p

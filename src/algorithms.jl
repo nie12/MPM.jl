@@ -1,9 +1,10 @@
 abstract type AbstractAlgorithm end
 
-# update stress first algorithm
-struct USF <: AbstractAlgorithm end
+struct UpdateStressFirst <: AbstractAlgorithm end
 
-function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim, T}}, ::USF, dt::Real) where {dim, T}
+function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim, T}}, ::UpdateStressFirst, tspan::Tuple{Real,Real}) where {dim, T}
+    dt = tspan[2] - tspan[1]
+    t = tspan[1]
     grid = reset!(prob.grid)
 
     #=
@@ -26,9 +27,9 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     =#
     for bc in prob.bvels
         @inbounds for i in nodeindices(bc)
-            v = bc.v(grid[i])
-            grid.v[i] = v
-            grid.mv[i] = grid.m[i] * v
+            v = bc.v(grid[i], t)
+            grid.v[i] = Vec(fill_missing(Tuple(grid.v[i]), v))
+            grid.mv[i] = grid.m[i] * grid.v[i]
         end
     end
 
@@ -39,7 +40,7 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
         p.L = sum(NodalValues((node,p) -> node.v ⊗ node.N'(p), grid, p))
         p.F = (I + dt*p.L) ⋅ p.F
         prob.update_stress!(p, dt) # TODO: consider better way to avoid type instability
-        fintᵢ = NodalValues((node,p) -> (-det(p.F)*p.V₀) * p.σ ⋅ node.N'(p), grid, p)
+        fintᵢ = NodalValues((node,p) -> (-det(p.F)*p.m/p.ρ₀) * p.σ ⋅ node.N'(p), grid, p)
         @inbounds add!(grid.f, fintᵢ)
     end
 
@@ -52,7 +53,8 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     end
     for bc in prob.bforces
         @inbounds for i in nodeindices(bc)
-            grid.f[i] += bc.f(grid[i])
+            f = bc.f(grid[i], t)
+            grid.f[i] += Vec(fill_missing(zero(T), f))
         end
     end
 
@@ -62,7 +64,8 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     =#
     for bc in prob.bvels
         @inbounds for i in nodeindices(bc)
-            grid.f[i] = zero(grid.f[i])
+            v = bc.v(grid[i], t)
+            grid.f[i] = Vec(fill_missing(Tuple(grid.f[i]), apply_nonmissing(zero(T), v)))
         end
     end
 
@@ -77,5 +80,25 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     for p in particles
         p.v = p.v + dt * sum(NodalValues((node,p) -> node.N(p) * node.f /₀ node.m, grid, p))
         p.x = p.x + dt * sum(NodalValues((node,p) -> node.N(p) * node.mv /₀ node.m, grid, p))
+    end
+end
+
+@generated function fill_missing(v::NTuple{N, Real}, x::NTuple{N, Union{Missing, Real}}) where {N}
+    return quote
+        @_inline_meta
+        @inbounds @ntuple $N i -> x[i] === missing ? v[i] : x[i]
+    end
+end
+@generated function fill_missing(v::Real, x::NTuple{N, Union{Missing, Real}}) where {N}
+    return quote
+        @_inline_meta
+        @inbounds @ntuple $N i -> x[i] === missing ? v : x[i]
+    end
+end
+
+@generated function apply_nonmissing(v::Real, x::NTuple{N, Union{Missing, Real}}) where {N}
+    return quote
+        @_inline_meta
+        @inbounds @ntuple $N i -> x[i] === missing ? missing : v
     end
 end

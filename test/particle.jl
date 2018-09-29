@@ -1,6 +1,6 @@
 @testset "Particle" begin
     for T in (Float32, Float64)
-        p = (@inferred Particle(x = Vec(rand(T)), m = rand(T), V₀ = rand(T)))::Particle{1, T, 1, 1}
+        p = (@inferred Particle(x = Vec(rand(T)), m = rand(T), ρ₀ = rand(T)))::Particle{1, T, 1, 1}
         # +p, -p
         for op in (+, -)
             y = (@inferred op(p))::typeof(p)
