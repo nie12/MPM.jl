@@ -5,6 +5,7 @@ using Base.Cartesian: @ntuple
 using LinearAlgebra
 using TensorArrays
 using RecipesBase
+using ProgressMeter: @showprogress
 
 export Node, Grid, Particle
 export Problem, BoundaryVelocity, BoundaryForce

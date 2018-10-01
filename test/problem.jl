@@ -18,9 +18,15 @@
                 v0 = sol[1].particles[1].v
                 @test s.particles[1].v::Vec{1, T} ≈ v0*cos(√(E/ρ) / L * s.t) atol = L*0.01
             end
+            # check interpolation
             for i in 1:length(sol)-1
                 t = (sol[i].t + sol[i+1].t) / 2
                 @test (@inferred sol(t)).particles[1] ≈ (sol[i].particles[1] + sol[i+1].particles[1]) / 2  atol=1e-6
+            end
+            # check option `length`
+            sol2 = solve(prob, particles, UpdateStressFirst(), dt = dt, length = 10)
+            for s in sol2
+                @test s.particles[1] ≈ sol(s.t).particles[1]
             end
         end
     end
@@ -40,9 +46,15 @@
                 g = prob.gravity
                 @test s.particles[1].v::Vec{2, T} ≈ g*s.t
             end
+            # check interpolation
             for i in 1:length(sol)-1
                 t = (sol[i].t + sol[i+1].t) / 2
                 @test (@inferred sol(t)).particles[1] ≈ (sol[i].particles[1] + sol[i+1].particles[1]) / 2  atol=1e-6
+            end
+            # check option `length`
+            sol2 = solve(prob, particles, UpdateStressFirst(), dt = dt, length = 10)
+            for s in sol2
+                @test s.particles[1] ≈ sol(s.t).particles[1]
             end
         end
     end

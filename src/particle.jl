@@ -6,20 +6,36 @@ mutable struct Particle{dim, T, M, Ms}
     L  :: Tensor{2, dim, T, M}           # velocity gradient
     F  :: Tensor{2, dim, T, M}           # deformation gradient
     σ  :: SymmetricTensor{2, dim, T, Ms} # stress
-end
 
-@generated function Particle(; x::Vec{dim, <: Real},
-                               ρ₀::Real,
-                               m::Real = NaN,
-                               v::Vec{dim, <: Real} = zero(x),
-                               L::Tensor{2, dim, <: Real, M} = zero(x ⊗ x),
-                               F::Tensor{2, dim, <: Real, M} = one(L),
-                               σ::SymmetricTensor{2, dim, <: Real, Ms} = zero(symmetric(L))) where {dim, M, Ms}
+    function Particle{dim, T, M, Ms}() where {dim, T, M, Ms}
+        new{dim, T, M, Ms}()
+    end
+    function Particle{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ) where {dim, T, M, Ms}
+        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ)
+    end
+end
+@generated function Particle(x::Vec{dim, <: Real},
+                             ρ₀::Real,
+                             m::Real,
+                             v::Vec{dim, <: Real},
+                             L::Tensor{2, dim, <: Real, M},
+                             F::Tensor{2, dim, <: Real, M},
+                             σ::SymmetricTensor{2, dim, <: Real, Ms}) where {dim, M, Ms}
     T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ))...)
     return quote
         @_inline_meta
         Particle{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ)
     end
+end
+
+@inline function Particle(; x::Vec{dim},
+                            ρ₀::Real,
+                            m::Real = NaN,
+                            v::Vec{dim} = zero(x),
+                            L::Tensor{2, dim} = zero(x ⊗ x),
+                            F::Tensor{2, dim} = one(L),
+                            σ::SymmetricTensor{2, dim} = zero(symmetric(L))) where {dim}
+    Particle(x, ρ₀, m, v, L, F, σ)
 end
 
 @generated function Base.convert(::Type{Particle{dim, T}}, p::Particle{dim, U, M, Ms}) where {dim, T, U, M, Ms}
@@ -102,3 +118,13 @@ end
         *($(exps...))
     end
 end
+
+@generated function Base.copy!(x::Particle, y::Particle)
+    exps = [:(x.$name = y.$name) for name in fieldnames(Particle)]
+    return quote
+        @_inline_meta
+        $(Expr(:block, exps...))
+        return x
+    end
+end
+@inline Base.copy(p::Particle) = copy!(typeof(p)(), p)
