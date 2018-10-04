@@ -54,6 +54,6 @@ for ShapeFunctionType in (ShapeFunction, GradientShapeFunction)
     @eval begin
         @inline (N::$ShapeFunctionType{dim})(x::NTuple{dim, Real}) where {dim} = N(Vec(x))
         @inline (N::$ShapeFunctionType{dim})(x::Vararg{Real, dim}) where {dim} = N(Vec(x))
-        @inline (N::$ShapeFunctionType{dim})(p::Particle{dim}) where {dim} = N(p.x)
+        @inline (N::$ShapeFunctionType{dim})(pt::MaterialPoint{dim}) where {dim} = N(pt.x)
     end
 end

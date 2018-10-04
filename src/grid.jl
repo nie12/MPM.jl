@@ -64,18 +64,18 @@ end
 @inline eachelement(grid::Grid) = CartesianIndices(nelements(grid))
 
 """
-    whichelement(::Grid, p::Vec)
-    whichelement(::Grid, p::Particle)
+    whichelement(::Grid, pt::Vec)
+    whichelement(::Grid, pt::MaterialPoint)
 
-Return the element index in which the particle `p` is located.
+Return the element index in which the material point `pt` is located.
 """
-@generated function whichelement(grid::Grid{dim}, p::Vec{dim}) where {dim}
+@generated function whichelement(grid::Grid{dim}, pt::Vec{dim}) where {dim}
     return quote
         @_inline_meta
-        @inbounds return CartesianIndex(@ntuple $dim i -> whichelement(minaxis(grid, i), stepaxis(grid, i), p[i]))
+        @inbounds return CartesianIndex(@ntuple $dim i -> whichelement(minaxis(grid, i), stepaxis(grid, i), pt[i]))
     end
 end
-@inline whichelement(grid::Grid, p::Particle) = whichelement(grid, p.x)
+@inline whichelement(grid::Grid, pt::MaterialPoint) = whichelement(grid, pt.x)
 @inline whichelement(x_min::Real, Δx::Real, x::Real) = floor(Int, (x - x_min) / Δx) + 1
 
 function reset!(grid::Grid{dim, T}) where {dim, T}

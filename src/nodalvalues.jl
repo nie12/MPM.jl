@@ -3,12 +3,12 @@ struct NodalValues{dim, T, L}
     data::NTuple{L, T}
 end
 
-@generated function NodalValues(f::Function, grid::Grid{dim}, p::Union{Vec{dim}, Particle{dim}}) where {dim}
+@generated function NodalValues(f::Function, grid::Grid{dim}, pt::Union{Vec{dim}, MaterialPoint{dim}}) where {dim}
     return quote
-        eltindex = whichelement(grid, p)
+        eltindex = whichelement(grid, pt)
         conn = connectivity(eltindex)
         @boundscheck checkbounds(grid, conn)
-        @inbounds return NodalValues(eltindex, @ntuple $(2^dim) i -> f(grid[conn[i]], p))
+        @inbounds return NodalValues(eltindex, @ntuple $(2^dim) i -> f(grid[conn[i]], pt))
     end
 end
 

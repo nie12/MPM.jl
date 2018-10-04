@@ -1,43 +1,43 @@
-struct Solution{dim, T, Ps <: AbstractArray{<: Particle{dim, T}}, VT <: AbstractVector{T}} <: AbstractVector{NamedTuple{(:t, :particles), Tuple{T, Ps}}}
+struct Solution{dim, T, MPs <: AbstractArray{<: MaterialPoint{dim, T}}, VT <: AbstractVector{T}} <: AbstractVector{NamedTuple{(:t, :points), Tuple{T, MPs}}}
     grid::Grid{dim, T}
     tᵢ::VT
-    particlesᵢ::Vector{Ps}
+    ptsᵢ::Vector{MPs}
 end
 
 @inline Base.size(sol::Solution) = size(sol.tᵢ)
-@inline Base.getindex(sol::Solution, i::Int) = (t=sol.tᵢ[i], particles=sol.particlesᵢ[i])
+@inline Base.getindex(sol::Solution, i::Int) = (t=sol.tᵢ[i], points=sol.ptsᵢ[i])
 
-function Solution(prob::Problem, particles_0::AbstractArray{P}; dt = missing, length = missing) where {dim, T, P <: Particle{dim, T}}
+function Solution(prob::Problem, pts::AbstractArray{MP}; dt = missing, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
     tᵢ = TimeSpan(prob, dt = dt, length = length)
-    particlesᵢ = Array{typeof(particles_0)}(undef, size(tᵢ))
-    @inbounds for i in eachindex(particlesᵢ)
-        particlesᵢ[i] = copy.(particles_0)
+    ptsᵢ = Array{typeof(pts)}(undef, size(tᵢ))
+    @inbounds for i in eachindex(ptsᵢ)
+        ptsᵢ[i] = copy.(pts)
     end
-    return Solution(prob.grid, tᵢ, particlesᵢ)
+    return Solution(prob.grid, tᵢ, ptsᵢ)
 end
 
-function solve(prob::Problem, particles::AbstractArray{P}, alg::AbstractAlgorithm; dt::Real, length = missing) where {dim, T, P <: Particle{dim, T}}
+function solve(prob::Problem, pts::AbstractArray{MP}, alg::AbstractAlgorithm; dt::Real, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
     if ismissing(length)
-        solve!(Solution(prob, particles, dt = dt), prob, particles, alg; dt = dt)
+        solve!(Solution(prob, pts, dt = dt), prob, pts, alg; dt = dt)
     else
-        solve!(Solution(prob, particles, length = length), prob, particles, alg; dt = dt)
+        solve!(Solution(prob, pts, length = length), prob, pts, alg; dt = dt)
     end
 end
 
-function solve!(sol::Solution{dim, T}, prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim, T}}, alg::AbstractAlgorithm; dt::Real) where {dim, T}
+function solve!(sol::Solution{dim, T}, prob::Problem{dim, T}, points::AbstractArray{<: MaterialPoint{dim, T}}, alg::AbstractAlgorithm; dt::Real) where {dim, T}
     tspan = TimeSpan(prob, dt = dt)
-    particlesₙ = copy.(particles)
-    particles = copy.(particles)
+    ptsₙ = copy.(points)
+    pts = copy.(points)
     count = 1
     @inbounds @showprogress 0.1 "Computing..." 0 for i in 2:length(tspan)
         tₙ = tspan[i-1]
         t = tspan[i]
-        update!(prob, particles, alg, (tₙ, t))
+        update!(prob, pts, alg, (tₙ, t))
         while checkbounds(Bool, sol.tᵢ, count) && tₙ ≤ sol.tᵢ[count] ≤ t
-            interpolate!(sol[count], (tₙ, particlesₙ), (t, particles))
+            interpolate!(sol[count], (tₙ, ptsₙ), (t, pts))
             count += 1
         end
-        copy!.(particlesₙ, particles)
+        copy!.(ptsₙ, pts)
     end
     return sol
 end
@@ -52,14 +52,14 @@ function (sol::Solution{dim, T})(t_::Real) where {dim, T}
     return map((x,y) -> (1-ξ)*x + ξ*y, sol[i-1], sol[i])
 end
 
-function interpolate!(sol::NamedTuple{(:t,:particles)}, (tₙ,xₙ), (t,x))
+function interpolate!(sol::NamedTuple{(:t,:points)}, (tₙ,xₙ), (t,x))
     if sol.t ≤ tₙ
-        copy!.(sol.particles, xₙ)
+        copy!.(sol.points, xₙ)
     elseif sol.t ≥ t
-        copy!.(sol.particles, x)
+        copy!.(sol.points, x)
     else
         ξ = (sol.t - tₙ) / (t - tₙ)
-        @. sol.particles = (1-ξ)*xₙ + ξ*x
+        @. sol.points = (1-ξ)*xₙ + ξ*x
     end
     return sol
 end

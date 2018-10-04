@@ -2,7 +2,7 @@ abstract type AbstractAlgorithm end
 
 struct UpdateStressFirst <: AbstractAlgorithm end
 
-function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim, T}}, ::UpdateStressFirst, tspan::Tuple{Real,Real}) where {dim, T}
+function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::UpdateStressFirst, tspan::Tuple{Real,Real}) where {dim, T}
     dt = tspan[2] - tspan[1]
     t = tspan[1]
     grid = reset!(prob.grid)
@@ -10,9 +10,9 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     #=
     Compute nodal mass and nodal momentum
     =#
-    for p in particles
-        mᵢ = NodalValues((node,p) -> node.N(p)*p.m, grid, p)
-        mvᵢ = NodalValues((node,p) -> node.N(p)*(p.m*p.v), grid, p)
+    for pt in pts
+        mᵢ = NodalValues((node,pt) -> node.N(pt)*pt.m, grid, pt)
+        mvᵢ = NodalValues((node,pt) -> node.N(pt)*(pt.m*pt.v), grid, pt)
         @inbounds add!(grid.m, mᵢ)
         @inbounds add!(grid.mv, mvᵢ)
     end
@@ -36,19 +36,19 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     #=
     Update stress and exterpolate nodal force
     =#
-    for p in particles
-        p.L = sum(NodalValues((node,p) -> node.v ⊗ node.N'(p), grid, p))
-        p.F = (I + dt*p.L) ⋅ p.F
-        prob.update_stress!(p, dt) # TODO: consider better way to avoid type instability
-        fintᵢ = NodalValues((node,p) -> (-det(p.F)*p.m/p.ρ₀) * p.σ ⋅ node.N'(p), grid, p)
+    for pt in pts
+        pt.L = sum(NodalValues((node,pt) -> node.v ⊗ node.N'(pt), grid, pt))
+        pt.F = (I + dt*pt.L) ⋅ pt.F
+        prob.update_stress!(pt, dt) # TODO: consider better way to avoid type instability
+        fintᵢ = NodalValues((node,pt) -> (-det(pt.F)*pt.m/pt.ρ₀) * pt.σ ⋅ node.N'(pt), grid, pt)
         @inbounds add!(grid.f, fintᵢ)
     end
 
     #=
     Add external nodal force for gravity and Neumann boundary condition
     =#
-    for p in particles
-        fextᵢ = NodalValues((node,p) -> node.N(p)*p.m*prob.gravity, grid, p)
+    for pt in pts
+        fextᵢ = NodalValues((node,pt) -> node.N(pt)*pt.m*prob.gravity, grid, pt)
         @inbounds add!(grid.f, fextᵢ)
     end
     for bc in prob.bforces
@@ -75,11 +75,11 @@ function update!(prob::Problem{dim, T}, particles::AbstractArray{<: Particle{dim
     @. grid.mv = grid.mv + dt * grid.f
 
     #=
-    Update particle velocity and position
+    Update velocity and position for material points
     =#
-    for p in particles
-        p.v = p.v + dt * sum(NodalValues((node,p) -> node.N(p) * node.f /₀ node.m, grid, p))
-        p.x = p.x + dt * sum(NodalValues((node,p) -> node.N(p) * node.mv /₀ node.m, grid, p))
+    for pt in pts
+        pt.v = pt.v + dt * sum(NodalValues((node,pt) -> node.N(pt) * node.f /₀ node.m, grid, pt))
+        pt.x = pt.x + dt * sum(NodalValues((node,pt) -> node.N(pt) * node.mv /₀ node.m, grid, pt))
     end
 end
 

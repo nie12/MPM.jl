@@ -7,13 +7,13 @@ using TensorArrays
 using RecipesBase
 using ProgressMeter: @showprogress
 
-export Node, Grid, Particle
+export Node, Grid, MaterialPoint
 export Problem, BoundaryVelocity, BoundaryForce
 export UpdateStressFirst
-export generategrid, generateparticles, solve
+export generategrid, generatepoints, solve
 
 include("utils.jl")
-include("particle.jl")
+include("materialpoint.jl")
 include("shapefunction.jl")
 include("node.jl")
 include("grid.jl")

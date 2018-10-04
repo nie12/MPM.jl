@@ -1,8 +1,8 @@
-@recipe function f(grid::Grid{dim, T}, sol::NamedTuple{(:t, :particles)}) where {dim, T}
-    np = length(sol.particles)
+@recipe function f(grid::Grid{dim, T}, sol::NamedTuple{(:t, :points)}) where {dim, T}
+    np = length(sol.points)
     points = Matrix{T}(undef, np, dim)
     for i in 1:np
-        points[i,:] = sol.particles[i].x
+        points[i,:] = sol.points[i].x
     end
     if dim ≥ 1
         xlims --> (minaxis(grid, 1), maxaxis(grid, 1))
@@ -26,11 +26,11 @@ end
 #=
 function output_vtk(filename::AbstractString, _sol::Solution{dim, T}, t::Real) where {dim, T}
     sol = _sol(t)
-    np = length(sol.particles)
+    np = length(sol.points)
     points = Matrix{T}(undef, dim, np)
     cells = fill(MeshCell(VTKCellTypes.VTK_VERTEX, [1]), np)
     for i in 1:np
-        points[:,i] = sol.particles[i].x
+        points[:,i] = sol.points[i].x
     end
     vtkfile = vtk_grid(filename, points, cells)
 end
