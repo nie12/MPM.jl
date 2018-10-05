@@ -21,6 +21,7 @@ include("grid.jl")
 include("boundary.jl")
 include("problem.jl")
 include("algorithms.jl")
+include("snapshot.jl")
 include("solution.jl")
 include("output.jl")
 

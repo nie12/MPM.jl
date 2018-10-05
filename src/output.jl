@@ -1,27 +1,30 @@
-@recipe function f(grid::Grid{dim, T}, sol::NamedTuple{(:t, :points)}) where {dim, T}
-    np = length(sol.points)
+@recipe function f(snap::SnapShot{dim, T}) where {dim, T}
+    np = length(snap)
     points = Matrix{T}(undef, np, dim)
     for i in 1:np
-        points[i,:] = sol.points[i].x
+        points[i,:] = snap[i].x
     end
     if dim ≥ 1
-        xlims --> (minaxis(grid, 1), maxaxis(grid, 1))
+        xlims --> snap.limits[1]
         if dim == 1
             ylims --> (-1, 1)
         end
     end
     if dim ≥ 2
-        ylims --> (minaxis(grid, 2), maxaxis(grid, 2))
+        ylims --> snap.limits[2]
     end
     if dim ≥ 3
-        zlims --> (minaxis(grid, 3), maxaxis(grid, 3))
+        zlims --> snap.limits[3]
     end
-    fillcolor := :blue
+    markercolor --> [:blue]
+    markerstrokewidth --> 0
+    dpi --> 150
     seriestype := :scatter
+    aspectratio := :equal
     dim == 1 ? (vec(points), _ -> zero(T)) : ntuple(d -> @view(points[:,d]), Val(dim))
 end
-@recipe f(sol::Solution, t::Real) = (sol.grid, sol(t))
-@recipe f(sol::Solution) = (sol.grid, sol[end])
+@recipe f(sol::Solution, t::Real) = (sol(t),)
+@recipe f(sol::Solution) = (sol[end],)
 
 #=
 function output_vtk(filename::AbstractString, _sol::Solution{dim, T}, t::Real) where {dim, T}

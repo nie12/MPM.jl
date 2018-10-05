@@ -75,17 +75,9 @@ end
     end
 end
 
-@generated function _fieldnames(::Type{<: MaterialPoint})
-    names = fieldnames(MaterialPoint)[1:end-1]
-    return quote
-        @_inline_meta
-        return $names
-    end
-end
-
 @inline Base.:+(pt::MaterialPoint) = pt
 @generated function Base.:-(pt::MaterialPoint)
-    exps = [:(-pt.$name) for name in _fieldnames(MaterialPoint)]
+    exps = [:(-pt.$name) for name in fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         MaterialPoint($(exps...))
@@ -94,7 +86,7 @@ end
 
 for op in (:+, :-)
     @eval @generated function Base.$op(x::MaterialPoint, y::MaterialPoint)
-        exps = [:($($op)(x.$name, y.$name)) for name in _fieldnames(MaterialPoint)]
+        exps = [:($($op)(x.$name, y.$name)) for name in fieldnames(MaterialPoint)]
         return quote
             @_inline_meta
             MaterialPoint($(exps...))
@@ -104,7 +96,7 @@ end
 
 for op in (:*, :/)
     @eval @generated function Base.$op(pt::MaterialPoint, x::Real)
-        exps = [:($($op)(pt.$name, x)) for name in _fieldnames(MaterialPoint)]
+        exps = [:($($op)(pt.$name, x)) for name in fieldnames(MaterialPoint)]
         return quote
             @_inline_meta
             MaterialPoint($(exps...))
@@ -112,7 +104,7 @@ for op in (:*, :/)
     end
 end
 @generated function Base.:*(x::Real, pt::MaterialPoint)
-    exps = [:(x * pt.$name) for name in _fieldnames(MaterialPoint)]
+    exps = [:(x * pt.$name) for name in fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         MaterialPoint($(exps...))
@@ -120,7 +112,7 @@ end
 end
 
 @generated function Base.:(==)(x::MaterialPoint, y::MaterialPoint)
-    exps = [:(x.$name == y.$name) for name in _fieldnames(MaterialPoint)]
+    exps = [:(x.$name == y.$name) for name in fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         *($(exps...))
@@ -128,7 +120,7 @@ end
 end
 
 @generated function Base.isapprox(x::MaterialPoint, y::MaterialPoint; kwargs...)
-    exps = [:(isapprox(x.$name, y.$name; kwargs...)) for name in _fieldnames(MaterialPoint)]
+    exps = [:(isapprox(x.$name, y.$name; kwargs...)) for name in fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         *($(exps...))

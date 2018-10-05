@@ -6,7 +6,7 @@
             E = 4π^2         # elastic modulus
             c = √(E/ρ)       # elastic wave speed
             dt = 0.1 * L / c # 5 percent of CFL condition
-            grid = @inferred generategrid(T[0 L], 1)
+            grid = @inferred generategrid(T[0 L], 1; interpolation = LinearInterpolation())
             points = @inferred generatepoints(x -> MaterialPoint(x = x, ρ₀ = 1, v = Vec(0.1)), grid, T[0 L], 1)
             prob = Problem(grid, (0, 100dt)) do pt, dt
                 dϵ = dt * symmetric(pt.L)
@@ -35,7 +35,7 @@
             H = 10
             E = 1 # elastic modulus
             dt = 0.01
-            grid = @inferred generategrid(T[0 H/10; 0 H], 1, 10)
+            grid = @inferred generategrid(T[0 H/10; 0 H], 1, 10; interpolation = LinearInterpolation())
             points = @inferred generatepoints(x -> MaterialPoint(x = x, ρ₀ = 1), grid, T[0 H/10; 9H/10 H], 1, 1)
             prob = Problem(grid, (0, 100dt); gravity = Vec(0, -9.81)) do pt, dt
                 dϵ = dt * symmetric(pt.L)

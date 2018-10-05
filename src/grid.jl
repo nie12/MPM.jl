@@ -26,7 +26,7 @@ Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
 end
 
 """
-    generategrid(domain::AbstractMatrix{<: Real}, nelts...)
+generategrid(domain::AbstractMatrix{<: Real}, nelts...; interpolation::AbstractInterpolation = GeneralizedInterpolation())
 
 Construct `Grid` in the given `domain`. `nelts` is number of elements in each direction.
 Use `[0 1; 0 2]` for domain ``[0, 1] \\times [0, 2]``.
@@ -48,7 +48,7 @@ julia> generategrid([0 1; 0 2], 2, 4)
 """
 function generategrid(domain::AbstractMatrix{<: Real},
                       nelts::Vararg{Int, dim};
-                      interpolation::AbstractInterpolation = LinearInterpolation()) where {dim}
+                      interpolation::AbstractInterpolation = GeneralizedInterpolation()) where {dim}
     nnodes = map(i -> i + 1, nelts)
     axs = generateaxs(domain, nnodes)
     T = eltype(eltype(axs))

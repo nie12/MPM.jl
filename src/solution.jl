@@ -1,19 +1,47 @@
-struct Solution{dim, T, MPs <: AbstractArray{<: MaterialPoint{dim, T}}, VT <: AbstractVector{T}} <: AbstractVector{NamedTuple{(:t, :points), Tuple{T, MPs}}}
+struct TimeSpan{T} <: AbstractVector{T}
+    span::LinRange{T}
+end
+
+@inline Base.size(tspan::TimeSpan) = size(tspan.span)
+@inline @propagate_inbounds Base.getindex(tspan::TimeSpan, i::Int) = tspan.span[i]
+
+function TimeSpan{T}(start::Real, stop::Real; dt = missing, length = missing) where {T}
+    @assert !ismissing(dt) ⊻ !ismissing(length)
+    if !ismissing(dt)
+        span = start:dt:stop
+        return span[end] == stop ? TimeSpan{T}(convert(LinRange{T}, span)) :
+                                   TimeSpan{T}(LinRange(start, stop, Base.length(span)+1))
+    elseif !ismissing(length)
+        return TimeSpan{T}(LinRange(start, stop, length))
+    end
+end
+function TimeSpan(prob::Problem{dim, T}; dt = missing, length = missing) where {dim, T}
+    TimeSpan{T}(prob.tspan[1], prob.tspan[2], dt = dt, length = length)
+end
+
+
+struct Solution{dim, T, N, M, Ms} <: AbstractVector{SnapShot{dim, T, N, M, Ms}}
     grid::Grid{dim, T}
-    tᵢ::VT
-    ptsᵢ::Vector{MPs}
+    tᵢ::TimeSpan{T}
+    pointsᵢ::Vector{Array{MaterialPoint{dim, T, M, Ms}, N}}
 end
 
 @inline Base.size(sol::Solution) = size(sol.tᵢ)
-@inline Base.getindex(sol::Solution, i::Int) = (t=sol.tᵢ[i], points=sol.ptsᵢ[i])
+@generated function Base.getindex(sol::Solution{dim}, i::Int) where {dim}
+    return quote
+        steps = @ntuple $dim i -> stepaxis(sol.grid, i)
+        limits = @ntuple $dim i -> (minaxis(sol.grid, i), maxaxis(sol.grid, i))
+        SnapShot(steps, limits, sol.tᵢ[i], sol.pointsᵢ[i])
+    end
+end
 
 function Solution(prob::Problem, pts::AbstractArray{MP}; dt = missing, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
     tᵢ = TimeSpan(prob, dt = dt, length = length)
-    ptsᵢ = Array{typeof(pts)}(undef, size(tᵢ))
-    @inbounds for i in eachindex(ptsᵢ)
-        ptsᵢ[i] = copy.(pts)
+    pointsᵢ = Array{typeof(pts)}(undef, size(tᵢ))
+    @inbounds for i in eachindex(pointsᵢ)
+        pointsᵢ[i] = copy.(pts)
     end
-    return Solution(prob.grid, tᵢ, ptsᵢ)
+    return Solution(prob.grid, tᵢ, pointsᵢ)
 end
 
 function solve(prob::Problem, pts::AbstractArray{MP}, alg::AbstractAlgorithm; dt::Real, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
@@ -44,42 +72,22 @@ end
 
 function (sol::Solution{dim, T})(t_::Real) where {dim, T}
     t = T(t_)
-    t ≤ sol.tᵢ[1]   && return sol[1]
-    t ≥ sol.tᵢ[end] && return sol[end]
-    i = findfirst(tᵢ -> t ≤ tᵢ, sol.tᵢ)
-    sol.tᵢ[i] == t && return sol[i]
-    ξ = (t - sol.tᵢ[i-1]) / (sol.tᵢ[i] - sol.tᵢ[i-1])
-    return map((x,y) -> (1-ξ)*x + ξ*y, sol[i-1], sol[i])
+    t ≤ sol[1].t   && return sol[1]
+    t ≥ sol[end].t && return sol[end]
+    i = findfirst(tᵢ -> t < tᵢ, sol.tᵢ)
+    out = similar(sol[1])
+    out.t = t
+    interpolate!(out, (sol[i-1].t, sol[i-1].points), (sol[i].t, sol[i].points))
 end
 
-function interpolate!(sol::NamedTuple{(:t,:points)}, (tₙ,xₙ), (t,x))
-    if sol.t ≤ tₙ
-        copy!.(sol.points, xₙ)
-    elseif sol.t ≥ t
-        copy!.(sol.points, x)
+function interpolate!(snap::SnapShot, (tₙ,xₙ), (t,x))
+    if snap.t ≤ tₙ
+        copy!.(snap.points, xₙ)
+    elseif snap.t ≥ t
+        copy!.(snap.points, x)
     else
-        ξ = (sol.t - tₙ) / (t - tₙ)
-        @. sol.points = (1-ξ)*xₙ + ξ*x
+        ξ = (snap.t - tₙ) / (t - tₙ)
+        @. snap.points = (1-ξ)*xₙ + ξ*x
     end
-    return sol
+    return snap
 end
-
-
-struct TimeSpan{T} <: AbstractVector{T}
-    span::LinRange{T}
-end
-
-@inline Base.size(tspan::TimeSpan) = size(tspan.span)
-@inline Base.getindex(tspan::TimeSpan, i::Int) = tspan.span[i]
-
-@inline function TimeSpan{T}(start::Real, stop::Real; dt = missing, length = missing) where {T}
-    @assert !ismissing(dt) ⊻ !ismissing(length)
-    if !ismissing(dt)
-        span = start:dt:stop
-        return span[end] == stop ? TimeSpan{T}(convert(LinRange{T}, span)) :
-                                   TimeSpan{T}(LinRange(start, stop, Base.length(span)+1))
-    elseif !ismissing(length)
-        return TimeSpan{T}(LinRange(start, stop, length))
-    end
-end
-@inline TimeSpan(prob::Problem{dim, T}; dt = missing, length = missing) where {dim, T} = @inbounds TimeSpan{T}(prob.tspan[1], prob.tspan[2], dt = dt, length = length)
