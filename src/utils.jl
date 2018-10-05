@@ -17,13 +17,4 @@ function generateaxs(domain::AbstractMatrix{<: Real}, axsize::NTuple{dim, Int}) 
     end
 end
 
-@generated function connectivity(eltindex::NTuple{dim, Int}) where {dim}
-    return quote
-        @_inline_meta
-        @inbounds return CartesianIndices(@ntuple $dim i -> eltindex[i]:eltindex[i]+1)
-    end
-end
-@inline connectivity(eltindex::Vararg{Int}) = connectivity(eltindex)
-@inline connectivity(eltindex::CartesianIndex) = connectivity(Tuple(eltindex))
-
 @inline /₀(x, y::Real) = y ≈ zero(y) ? zero(x) : x / y

@@ -11,10 +11,8 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     Compute nodal mass and nodal momentum
     =#
     for pt in pts
-        mᵢ = NodalValues((node,pt) -> node.N(pt)*pt.m, grid, pt)
-        mvᵢ = NodalValues((node,pt) -> node.N(pt)*(pt.m*pt.v), grid, pt)
-        @inbounds add!(grid.m, mᵢ)
-        @inbounds add!(grid.mv, mvᵢ)
+        @inbounds add!((node,pt) -> node.N(pt)*pt.m,        grid.m,  grid, pt)
+        @inbounds add!((node,pt) -> node.N(pt)*(pt.m*pt.v), grid.mv, grid, pt)
     end
 
     #=
@@ -37,19 +35,17 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     Update stress and exterpolate nodal force
     =#
     for pt in pts
-        pt.L = sum(NodalValues((node,pt) -> node.v ⊗ node.N'(pt), grid, pt))
+        pt.L = sum((node,pt) -> node.v ⊗ node.N'(pt), grid, pt)
         pt.F = (I + dt*pt.L) ⋅ pt.F
         prob.update_stress!(pt, dt) # TODO: consider better way to avoid type instability
-        fintᵢ = NodalValues((node,pt) -> (-det(pt.F)*pt.m/pt.ρ₀) * pt.σ ⋅ node.N'(pt), grid, pt)
-        @inbounds add!(grid.f, fintᵢ)
     end
 
     #=
-    Add external nodal force for gravity and Neumann boundary condition
+    Compute internal force, gravity force, and surface force by Neumann boundary condition
     =#
     for pt in pts
-        fextᵢ = NodalValues((node,pt) -> node.N(pt)*pt.m*prob.gravity, grid, pt)
-        @inbounds add!(grid.f, fextᵢ)
+        @inbounds add!((node,pt) -> (-det(pt.F)*pt.m/pt.ρ₀) * pt.σ ⋅ node.N'(pt), grid.f, grid, pt)
+        @inbounds add!((node,pt) -> node.N(pt)*pt.m*prob.gravity, grid.f, grid, pt)
     end
     for bc in prob.bforces
         @inbounds for i in nodeindices(bc)
@@ -78,8 +74,18 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     Update velocity and position for material points
     =#
     for pt in pts
-        pt.v = pt.v + dt * sum(NodalValues((node,pt) -> node.N(pt) * node.f /₀ node.m, grid, pt))
-        pt.x = pt.x + dt * sum(NodalValues((node,pt) -> node.N(pt) * node.mv /₀ node.m, grid, pt))
+        pt.v = pt.v + dt * sum((node,pt) -> node.N(pt) * node.f /₀ node.m, grid, pt)
+        pt.x = pt.x + dt * sum((node,pt) -> node.N(pt) * node.mv /₀ node.m, grid, pt)
+    end
+end
+
+@inline function Base.sum(f::Function, grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
+    sum(i -> f(@inbounds(grid[i]), pt), relnodeindices(grid, pt))
+end
+
+@inline @propagate_inbounds function add!(f::Function, A::AbstractArray, grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
+    for i in relnodeindices(grid, pt)
+        A[i] += f(@inbounds(grid[i]), pt)
     end
 end
 

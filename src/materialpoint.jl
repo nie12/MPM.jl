@@ -6,12 +6,16 @@ mutable struct MaterialPoint{dim, T, M, Ms}
     L  :: Tensor{2, dim, T, M}           # velocity gradient
     F  :: Tensor{2, dim, T, M}           # deformation gradient
     σ  :: SymmetricTensor{2, dim, T, Ms} # stress
+    lₚ :: Vec{dim, T}
 
     function MaterialPoint{dim, T, M, Ms}() where {dim, T, M, Ms}
         new{dim, T, M, Ms}()
     end
+    function MaterialPoint{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ) where {dim, T, M, Ms}
+        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ)
+    end
     function MaterialPoint{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ) where {dim, T, M, Ms}
-        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ)
+        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, fill(T(NaN), Vec{dim, T}))
     end
 end
 
@@ -30,6 +34,20 @@ end
                                   v::Vec{dim, <: Real},
                                   L::Tensor{2, dim, <: Real, M},
                                   F::Tensor{2, dim, <: Real, M},
+                                  σ::SymmetricTensor{2, dim, <: Real, Ms},
+                                  lₚ::Vec{dim, <: Real}) where {dim, M, Ms}
+    T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ, lₚ))...)
+    return quote
+        @_inline_meta
+        MaterialPoint{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ)
+    end
+end
+@generated function MaterialPoint(x::Vec{dim, <: Real},
+                                  ρ₀::Real,
+                                  m::Real,
+                                  v::Vec{dim, <: Real},
+                                  L::Tensor{2, dim, <: Real, M},
+                                  F::Tensor{2, dim, <: Real, M},
                                   σ::SymmetricTensor{2, dim, <: Real, Ms}) where {dim, M, Ms}
     T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ))...)
     return quote
@@ -39,13 +57,14 @@ end
 end
 
 @inline function MaterialPoint(; x::Vec{dim},
-                               ρ₀::Real,
-                               m::Real = NaN,
-                               v::Vec{dim} = zero(x),
-                               L::Tensor{2, dim} = zero(x ⊗ x),
-                               F::Tensor{2, dim} = one(L),
-                               σ::SymmetricTensor{2, dim} = zero(symmetric(L))) where {dim}
-    MaterialPoint(x, ρ₀, m, v, L, F, σ)
+                                 ρ₀::Real,
+                                 m::Real = 0,
+                                 v::Vec{dim} = zero(x),
+                                 L::Tensor{2, dim} = zero(x ⊗ x),
+                                 F::Tensor{2, dim} = one(L),
+                                 σ::SymmetricTensor{2, dim} = zero(symmetric(L)),
+                                 lₚ::Vec{dim} = zero(x)) where {dim}
+    MaterialPoint(x, ρ₀, m, v, L, F, σ, lₚ)
 end
 
 @generated function Base.convert(::Type{MaterialPoint{dim, T}}, pt::MaterialPoint{dim, U, M, Ms}) where {dim, T, U, M, Ms}
@@ -56,30 +75,17 @@ end
     end
 end
 
-function generatepoints(f::Function,
-                        domain::AbstractMatrix{<: Real},
-                        nparts::Vararg{Int, dim};
-                        fillbounds::Bool = false) where {dim}
-    axs = generateaxs(domain, fillbounds == true ? nparts : map(i->i+2, nparts))
-    sz = map(len -> fillbounds == true ? (1:len) : (2:len-1), length.(axs))
-    particles = map(CartesianIndices(sz)) do cartesian
-        coord = Vec(getindex.(axs, Tuple(cartesian)))
-        pt = f(coord)
-        T = eltype(eltype(axs))
-        return convert(MaterialPoint{dim, T}, pt)
+@generated function _fieldnames(::Type{<: MaterialPoint})
+    names = fieldnames(MaterialPoint)[1:end-1]
+    return quote
+        @_inline_meta
+        return $names
     end
-    V = prod(domain[:,2] - domain[:,1])
-    np = length(particles)
-    Vₚ = V / np
-    for pt in particles
-        pt.m = pt.ρ₀ * Vₚ
-    end
-    return particles
 end
 
 @inline Base.:+(pt::MaterialPoint) = pt
 @generated function Base.:-(pt::MaterialPoint)
-    exps = [:(-pt.$name) for name in fieldnames(MaterialPoint)]
+    exps = [:(-pt.$name) for name in _fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         MaterialPoint($(exps...))
@@ -88,7 +94,7 @@ end
 
 for op in (:+, :-)
     @eval @generated function Base.$op(x::MaterialPoint, y::MaterialPoint)
-        exps = [:($($op)(x.$name, y.$name)) for name in fieldnames(MaterialPoint)]
+        exps = [:($($op)(x.$name, y.$name)) for name in _fieldnames(MaterialPoint)]
         return quote
             @_inline_meta
             MaterialPoint($(exps...))
@@ -98,7 +104,7 @@ end
 
 for op in (:*, :/)
     @eval @generated function Base.$op(pt::MaterialPoint, x::Real)
-        exps = [:($($op)(pt.$name, x)) for name in fieldnames(MaterialPoint)]
+        exps = [:($($op)(pt.$name, x)) for name in _fieldnames(MaterialPoint)]
         return quote
             @_inline_meta
             MaterialPoint($(exps...))
@@ -106,7 +112,7 @@ for op in (:*, :/)
     end
 end
 @generated function Base.:*(x::Real, pt::MaterialPoint)
-    exps = [:(x * pt.$name) for name in fieldnames(MaterialPoint)]
+    exps = [:(x * pt.$name) for name in _fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         MaterialPoint($(exps...))
@@ -114,7 +120,7 @@ end
 end
 
 @generated function Base.:(==)(x::MaterialPoint, y::MaterialPoint)
-    exps = [:(x.$name == y.$name) for name in fieldnames(MaterialPoint)]
+    exps = [:(x.$name == y.$name) for name in _fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         *($(exps...))
@@ -122,7 +128,7 @@ end
 end
 
 @generated function Base.isapprox(x::MaterialPoint, y::MaterialPoint; kwargs...)
-    exps = [:(isapprox(x.$name, y.$name; kwargs...)) for name in fieldnames(MaterialPoint)]
+    exps = [:(isapprox(x.$name, y.$name; kwargs...)) for name in _fieldnames(MaterialPoint)]
     return quote
         @_inline_meta
         *($(exps...))

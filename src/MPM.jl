@@ -7,6 +7,7 @@ using TensorArrays
 using RecipesBase
 using ProgressMeter: @showprogress
 
+export ShapeFunction, LinearInterpolation, GeneralizedInterpolation
 export Node, Grid, MaterialPoint
 export Problem, BoundaryVelocity, BoundaryForce
 export UpdateStressFirst
@@ -17,7 +18,6 @@ include("materialpoint.jl")
 include("shapefunction.jl")
 include("node.jl")
 include("grid.jl")
-include("nodalvalues.jl")
 include("boundary.jl")
 include("problem.jl")
 include("algorithms.jl")

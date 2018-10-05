@@ -1,59 +1,74 @@
-"""
-    ShapeFunction1D(x::Real, l::Real)
+abstract type AbstractInterpolation end
 
-`ShapeFunction1D` is defined at 1D global coordinate `x` with nodal spacing `l`.
-"""
-struct ShapeFunction1D{T <: Real}
-    xi::T
-    l::T
+#################
+# ShapeFunction #
+#################
+
+struct ShapeFunction{Interpolation <: AbstractInterpolation, dim, T}
+    interpolation::Interpolation
+    x::Vec{dim, T}
+    l::Vec{dim, T}
 end
 
-@inline function value(N::ShapeFunction1D{T}, x::Real) where {T}
-    d = abs(x - N.xi)
-    return d ≤ N.l ? (1 - d / N.l) : zero(d)
+#########################
+# GradientShapeFunction #
+#########################
+
+struct GradientShapeFunction{Interpolation <: AbstractInterpolation, dim, T}
+    N::ShapeFunction{Interpolation, dim, T}
 end
-
-@inline function TensorArrays.gradient(N::ShapeFunction1D{T}, x::Real) where {T}
-    gradient(x -> value(N, x), x)
-end
+@inline LinearAlgebra.adjoint(N::ShapeFunction) = GradientShapeFunction(N)
+@inline (∇N::GradientShapeFunction)(pt::MaterialPoint) = gradient(∇N.N, pt)
 
 
-struct ShapeFunction{dim, T <: Real}
-    shapes::NTuple{dim, ShapeFunction1D{T}}
-end
+# LinearInterpolation
+# -------------------
 
-@inline function ShapeFunction(coord::Vec{dim, T}, l::NTuple{dim, T}) where {dim, T}
-    shapes = ntuple(Val(dim)) do i
-        @inbounds return ShapeFunction1D(coord[i], l[i])
-    end
-    return ShapeFunction(shapes)
-end
+struct LinearInterpolation <: AbstractInterpolation end
 
-@generated function value(N::ShapeFunction{dim}, x::Vec{dim}) where {dim}
+@generated function value(N::ShapeFunction{LinearInterpolation, dim}, x::Vec{dim}) where {dim}
     return quote
         @_inline_meta
-        @inbounds return prod(@ntuple $dim i -> value(N.shapes[i], x[i]))
+        @inbounds prod(@ntuple $dim i -> begin
+                           l = N.l[i]
+                           d = abs(x[i] - N.x[i])
+                           d < l ? 1 - d / l : zero(d)
+                       end)
     end
 end
-@inline (N::ShapeFunction{dim})(x::Vec{dim}) where {dim} = value(N, x)
+@inline (N::ShapeFunction{LinearInterpolation})(pt::MaterialPoint) = value(N, pt.x)
 
-@inline function TensorArrays.gradient(N::ShapeFunction{dim}, x::Vec{dim}) where {dim}
+@inline function TensorArrays.gradient(N::ShapeFunction{LinearInterpolation}, x::Vec)
     gradient(x -> value(N, x), x)
 end
-
-
-struct GradientShapeFunction{dim, T <: Real}
-    N::ShapeFunction{dim, T}
+@inline function TensorArrays.gradient(N::ShapeFunction{LinearInterpolation}, pt::MaterialPoint)
+    gradient(N, pt.x)
 end
 
-@inline LinearAlgebra.adjoint(N::ShapeFunction) = GradientShapeFunction(N)
 
-@inline (∇N::GradientShapeFunction{dim})(x::Vec{dim}) where {dim} = gradient(∇N.N, x)
+# GeneralizedInterpolation
+# ------------------------
 
-for ShapeFunctionType in (ShapeFunction, GradientShapeFunction)
-    @eval begin
-        @inline (N::$ShapeFunctionType{dim})(x::NTuple{dim, Real}) where {dim} = N(Vec(x))
-        @inline (N::$ShapeFunctionType{dim})(x::Vararg{Real, dim}) where {dim} = N(Vec(x))
-        @inline (N::$ShapeFunctionType{dim})(pt::MaterialPoint{dim}) where {dim} = N(pt.x)
+struct GeneralizedInterpolation <: AbstractInterpolation end
+
+@generated function value(N::ShapeFunction{GeneralizedInterpolation, dim}, x::Vec{dim}, lₚ_::Vec{dim}) where {dim}
+    return quote
+        @_inline_meta
+        @inbounds prod(@ntuple $dim i -> begin
+                           l = N.l[i]
+                           lₚ = lₚ_[i]
+                           d = abs(x[i] - N.x[i])
+                           d < lₚ     ? 1 - (d^2+ lₚ^2) / (2l*lₚ) :
+                           d < l - lₚ ? 1 - d / l                 :
+                           d < l + lₚ ? (l + lₚ - d)^2 / (4l*lₚ)  : zero(d)
+                       end)
     end
+end
+@inline (N::ShapeFunction{GeneralizedInterpolation})(pt::MaterialPoint) = value(N, pt.x, pt.lₚ)
+
+@inline function TensorArrays.gradient(N::ShapeFunction{GeneralizedInterpolation}, x::Vec, lₚ::Vec)
+    gradient(x -> value(N, x, lₚ), x)
+end
+@inline function TensorArrays.gradient(N::ShapeFunction{GeneralizedInterpolation}, pt::MaterialPoint)
+    gradient(N, pt.x, pt.lₚ)
 end

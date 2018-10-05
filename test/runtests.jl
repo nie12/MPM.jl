@@ -28,6 +28,5 @@ end
 
 include("materialpoint.jl")
 include("shapefunction.jl")
-include("node.jl")
 include("grid.jl")
 include("problem.jl")

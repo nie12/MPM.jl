@@ -1,6 +1,6 @@
-struct Node{dim, T <: Real} <: AbstractVector{T}
+struct Node{dim, T <: Real, Interpolation <: AbstractInterpolation} <: AbstractVector{T}
     id::Int
-    N::ShapeFunction{dim, T}
+    N::ShapeFunction{Interpolation, dim, T}
     m::Ptr{T}
     v::Ptr{Vec{dim, T}}
     mv::Ptr{Vec{dim, T}}
@@ -8,7 +8,7 @@ struct Node{dim, T <: Real} <: AbstractVector{T}
 end
 
 @inline Base.size(::Node{dim}) where {dim} = (dim,)
-@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.N.shapes[i].xi
+@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.N.x[i]
 
 @inline function Base.getproperty(node::Node, name::Symbol)
     return name == :id || name == :N ? getfield(node, name) : unsafe_load(getfield(node, name))
