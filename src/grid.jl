@@ -85,7 +85,7 @@ end
                                    end)
     end
 end
-@generated function relnodeindices(grid::Grid{dim, T, uGIMP}, pt::MaterialPoint{dim}) where {dim, T}
+@generated function relnodeindices(grid::Grid{dim, T, <: GIMP}, pt::MaterialPoint{dim}) where {dim, T}
     return quote
         @_inline_meta
         eltindex = whichelement(grid, pt)
@@ -142,12 +142,13 @@ function generatepoints(f::Function,
         pt = f(coord)
         return convert(MaterialPoint{dim, T}, pt)
     end
-    # initialize material point mass `m` and particle size `lₚ`
+    # initialize material point mass `m` and particle size `lp`
     V = prod(step.(grid.axs))
     Vₚ = V / prod(npts)
     for pt in pts
         pt.m = pt.ρ₀ * Vₚ
-        pt.lₚ = Vec(map(/, step.(grid.axs), 2 .* npts))
+        pt.lp₀ = Vec(map(/, step.(grid.axs), 2 .* npts))
+        pt.lp = pt.lp₀
     end
     return pts
 end

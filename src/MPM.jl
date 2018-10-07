@@ -7,7 +7,7 @@ using TensorArrays
 using RecipesBase
 using ProgressMeter: @showprogress
 
-export ShapeFunction, Tent, uGIMP
+export ShapeFunction, Tent, uGIMP, cpGIMP
 export Node, Grid, MaterialPoint
 export Problem, BoundaryVelocity, BoundaryForce
 export USF

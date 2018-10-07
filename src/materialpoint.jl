@@ -1,18 +1,19 @@
 mutable struct MaterialPoint{dim, T, M, Ms}
-    x  :: Vec{dim, T}                    # coordinate
-    ρ₀ :: T                              # initial density
-    m  :: T                              # mass
-    v  :: Vec{dim, T}                    # velocity
-    L  :: Tensor{2, dim, T, M}           # velocity gradient
-    F  :: Tensor{2, dim, T, M}           # deformation gradient
-    σ  :: SymmetricTensor{2, dim, T, Ms} # stress
-    lₚ :: Vec{dim, T}
+    x   :: Vec{dim, T}                    # coordinate
+    ρ₀  :: T                              # initial density
+    m   :: T                              # mass
+    v   :: Vec{dim, T}                    # velocity
+    L   :: Tensor{2, dim, T, M}           # velocity gradient
+    F   :: Tensor{2, dim, T, M}           # deformation gradient
+    σ   :: SymmetricTensor{2, dim, T, Ms} # stress
+    lp  :: Vec{dim, T}
+    lp₀ :: Vec{dim, T}
 
     function MaterialPoint{dim, T, M, Ms}() where {dim, T, M, Ms}
         new{dim, T, M, Ms}()
     end
-    function MaterialPoint{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ) where {dim, T, M, Ms}
-        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ)
+    function MaterialPoint{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lp, lp₀) where {dim, T, M, Ms}
+        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lp, lp₀)
     end
 end
 
@@ -32,11 +33,12 @@ end
                                   L::Tensor{2, dim, <: Real, M},
                                   F::Tensor{2, dim, <: Real, M},
                                   σ::SymmetricTensor{2, dim, <: Real, Ms},
-                                  lₚ::Vec{dim, <: Real}) where {dim, M, Ms}
-    T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ, lₚ))...)
+                                  lp::Vec{dim, <: Real},
+                                  lp₀::Vec{dim, <: Real}) where {dim, M, Ms}
+    T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ, lp, lp₀))...)
     return quote
         @_inline_meta
-        MaterialPoint{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ)
+        MaterialPoint{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ, lp, lp₀)
     end
 end
 
@@ -47,8 +49,8 @@ end
                                  L::Tensor{2, dim} = zero(x ⊗ x),
                                  F::Tensor{2, dim} = one(L),
                                  σ::SymmetricTensor{2, dim} = zero(symmetric(L)),
-                                 lₚ::Vec{dim} = zero(x)) where {dim}
-    MaterialPoint(x, ρ₀, m, v, L, F, σ, lₚ)
+                                 lp::Vec{dim} = zero(x)) where {dim}
+    MaterialPoint(x, ρ₀, m, v, L, F, σ, lp, lp)
 end
 
 @generated function Base.convert(::Type{MaterialPoint{dim, T}}, pt::MaterialPoint{dim, U, M, Ms}) where {dim, T, U, M, Ms}

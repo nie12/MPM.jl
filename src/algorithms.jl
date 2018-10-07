@@ -50,7 +50,7 @@ function compute_nodal_mass_momentum_velocity!(prob::Problem{dim, T}, pts::Array
     end
 end
 
-function update_stress!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+function update_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {interp, dim, T}
     dt = tspan[2] - tspan[1]
     grid = prob.grid
 
@@ -64,6 +64,7 @@ function update_stress!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, 
         pt.L = L
         pt.F += dt*L ⋅ pt.F
         prob.update_stress!(pt, dt) # TODO: consider better way to avoid type instability
+        update_particle_domain!(pt, interp)
     end
 end
 
