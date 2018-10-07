@@ -2,8 +2,7 @@
 `Grid` is a subtype of `AbstractArray` which stores nodes with linear nodal spacing.
 See `generategrid` to construct `Grid` type.
 """
-struct Grid{dim, T, Interpolation <: AbstractInterpolation} <: AbstractArray{Node{dim, T, Interpolation}, dim}
-    interpolation::Interpolation
+struct Grid{dim, T, interp} <: AbstractArray{Node{dim, T, interp}, dim}
     axs::NTuple{dim, LinRange{T}}
     m::Array{T, dim}
     v::Array{Vec{dim, T}, dim}
@@ -14,19 +13,14 @@ end
 Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
 
 @inline Base.size(grid::Grid) = map(length, grid.axs)
-@inline function Base.getindex(grid::Grid{dim, T}, cartesian::Vararg{Int, dim}) where {dim, T}
+@inline function Base.getindex(grid::Grid{dim, T, interp}, cartesian::Vararg{Int, dim}) where {dim, T, interp}
     @boundscheck checkbounds(grid, cartesian...)
-    N = ShapeFunction(grid.interpolation, Vec(getindex.(grid.axs, cartesian)), Vec(step.(grid.axs)))
-    @inbounds i = LinearIndices(grid)[cartesian...]
-    return Node(i, N,
-                pointer(grid.m, i),
-                pointer(grid.v, i),
-                pointer(grid.mv, i),
-                pointer(grid.f, i))
+    N = ShapeFunction{interp}(Vec(getindex.(grid.axs, cartesian)), Vec(step.(grid.axs)))
+    return Node(CartesianIndex(cartesian), N, grid.m, grid.v, grid.mv, grid.f)
 end
 
 """
-generategrid(domain::AbstractMatrix{<: Real}, nelts...; interpolation::AbstractInterpolation = GeneralizedInterpolation())
+generategrid(domain::AbstractMatrix{<: Real}, nelts...; interpolation::Interpolation)
 
 Construct `Grid` in the given `domain`. `nelts` is number of elements in each direction.
 Use `[0 1; 0 2]` for domain ``[0, 1] \\times [0, 2]``.
@@ -48,16 +42,15 @@ julia> generategrid([0 1; 0 2], 2, 4)
 """
 function generategrid(domain::AbstractMatrix{<: Real},
                       nelts::Vararg{Int, dim};
-                      interpolation::AbstractInterpolation = GeneralizedInterpolation()) where {dim}
+                      interpolation::Interpolation) where {dim}
     nnodes = map(i -> i + 1, nelts)
     axs = generateaxs(domain, nnodes)
     T = eltype(eltype(axs))
-    Grid(interpolation,
-         axs,
-         fill(zero(T), nnodes),
-         fill(zero(Vec{dim, T}), nnodes),
-         fill(zero(Vec{dim, T}), nnodes),
-         fill(zero(Vec{dim, T}), nnodes))
+    Grid{dim, T, typeof(interpolation)}(axs,
+                                        fill(zero(T), nnodes),
+                                        fill(zero(Vec{dim, T}), nnodes),
+                                        fill(zero(Vec{dim, T}), nnodes),
+                                        fill(zero(Vec{dim, T}), nnodes))
 end
 
 @inline @propagate_inbounds minaxis(grid::Grid, d::Int) = first(grid.axs[d])
@@ -80,7 +73,7 @@ Return the element index in which the material point `pt` is located.
 end
 @inline whichelement(x_min::Real, Δx::Real, x::Real) = floor(Int, (x - x_min) / Δx) + 1
 
-@generated function relnodeindices(grid::Grid{dim, T, LinearInterpolation}, pt::MaterialPoint{dim}) where {dim, T}
+@generated function relnodeindices(grid::Grid{dim, T, Tent}, pt::MaterialPoint{dim}) where {dim, T}
     return quote
         @_inline_meta
         eltindex = whichelement(grid, pt)
@@ -92,7 +85,7 @@ end
                                    end)
     end
 end
-@generated function relnodeindices(grid::Grid{dim, T, GeneralizedInterpolation}, pt::MaterialPoint{dim}) where {dim, T}
+@generated function relnodeindices(grid::Grid{dim, T, uGIMP}, pt::MaterialPoint{dim}) where {dim, T}
     return quote
         @_inline_meta
         eltindex = whichelement(grid, pt)

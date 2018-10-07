@@ -7,10 +7,10 @@ using TensorArrays
 using RecipesBase
 using ProgressMeter: @showprogress
 
-export ShapeFunction, LinearInterpolation, GeneralizedInterpolation
+export ShapeFunction, Tent, uGIMP
 export Node, Grid, MaterialPoint
 export Problem, BoundaryVelocity, BoundaryForce
-export UpdateStressFirst
+export USF
 export generategrid, generatepoints, solve
 
 include("utils.jl")

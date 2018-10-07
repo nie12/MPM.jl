@@ -14,9 +14,6 @@ mutable struct MaterialPoint{dim, T, M, Ms}
     function MaterialPoint{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ) where {dim, T, M, Ms}
         new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ)
     end
-    function MaterialPoint{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ) where {dim, T, M, Ms}
-        new{dim, T, M, Ms}(x, ρ₀, m, v, L, F, σ, fill(T(NaN), Vec{dim, T}))
-    end
 end
 
 @generated function MaterialPoint{dim, T}() where {dim, T}
@@ -40,19 +37,6 @@ end
     return quote
         @_inline_meta
         MaterialPoint{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ, lₚ)
-    end
-end
-@generated function MaterialPoint(x::Vec{dim, <: Real},
-                                  ρ₀::Real,
-                                  m::Real,
-                                  v::Vec{dim, <: Real},
-                                  L::Tensor{2, dim, <: Real, M},
-                                  F::Tensor{2, dim, <: Real, M},
-                                  σ::SymmetricTensor{2, dim, <: Real, Ms}) where {dim, M, Ms}
-    T = promote_type(eltype.((x, ρ₀, m, v, L, F, σ))...)
-    return quote
-        @_inline_meta
-        MaterialPoint{dim, $T, M, Ms}(x, ρ₀, m, v, L, F, σ)
     end
 end
 

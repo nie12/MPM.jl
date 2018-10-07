@@ -1,58 +1,106 @@
 abstract type AbstractAlgorithm end
 
-struct UpdateStressFirst <: AbstractAlgorithm end
+struct USF <: AbstractAlgorithm end
 
-function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::UpdateStressFirst, tspan::Tuple{Real,Real}) where {dim, T}
-    dt = tspan[2] - tspan[1]
+function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{Real,Real}) where {dim, T}
     t = tspan[1]
-    grid = reset!(prob.grid)
+    dt = tspan[2] - tspan[1]
+    reset!(prob.grid)
+    compute_nodal_mass_momentum_velocity!(prob, pts, tspan)
+    update_stress!(prob, pts, tspan)
+    compute_nodal_force!(prob, pts, tspan)
+    update_nodal_mass_momentum_velocity!(prob, pts, tspan)
+end
+
+function compute_nodal_mass_momentum_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+    t = tspan[1]
+    grid = prob.grid
 
     #=
     Compute nodal mass and nodal momentum
     =#
     for pt in pts
-        @inbounds add!((node,pt) -> node.N(pt)*pt.m,        grid.m,  grid, pt)
-        @inbounds add!((node,pt) -> node.N(pt)*(pt.m*pt.v), grid.mv, grid, pt)
+        for i in relnodeindices(grid, pt)
+            @inbounds node = grid[i]
+            N = node.N(pt)
+            node.m += N * pt.m
+            node.mv += N * pt.m * pt.v
+        end
     end
 
     #=
     Compute nodal velocity
     =#
-    @. grid.v = grid.mv /₀ grid.m
+    for node in grid
+        if node.m > eps(T)
+            node.v = node.mv / node.m
+        end
+    end
 
     #=
     Modify nodal velocity for Dirichlet boundary condition
     =#
     for bc in prob.bvels
         @inbounds for i in nodeindices(bc)
-            v = bc.v(grid[i], t)
-            grid.v[i] = Vec(fill_missing(Tuple(grid.v[i]), v))
-            grid.mv[i] = grid.m[i] * grid.v[i]
+            node = grid[i]
+            v = bc.v(node, t)
+            node.v = Vec(fill_missing(Tuple(node.v), v))
+            node.mv = node.m * node.v
         end
     end
+end
 
-    #=
-    Update stress and exterpolate nodal force
-    =#
+function update_stress!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+    dt = tspan[2] - tspan[1]
+    grid = prob.grid
+
     for pt in pts
-        pt.L = sum((node,pt) -> node.v ⊗ node.N'(pt), grid, pt)
-        pt.F = (I + dt*pt.L) ⋅ pt.F
+        L = zero(pt.L)
+        for i in relnodeindices(grid, pt)
+            @inbounds node = grid[i]
+            N′ = node.N'(pt)
+            L += node.v ⊗ N′
+        end
+        pt.L = L
+        pt.F += dt*L ⋅ pt.F
         prob.update_stress!(pt, dt) # TODO: consider better way to avoid type instability
     end
+end
+
+function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+    t = tspan[1]
+    grid = prob.grid
 
     #=
-    Compute internal force, gravity force, and surface force by Neumann boundary condition
+    Compute internal force and gravity force
     =#
     for pt in pts
-        @inbounds add!((node,pt) -> (-det(pt.F)*pt.m/pt.ρ₀) * pt.σ ⋅ node.N'(pt), grid.f, grid, pt)
-        @inbounds add!((node,pt) -> node.N(pt)*pt.m*prob.gravity, grid.f, grid, pt)
-    end
-    for bc in prob.bforces
-        @inbounds for i in nodeindices(bc)
-            f = bc.f(grid[i], t)
-            grid.f[i] += Vec(fill_missing(zero(T), f))
+        for i in relnodeindices(grid, pt)
+            @inbounds node = grid[i]
+            N = node.N(pt)
+            N′ = node.N'(pt)
+            fint = (-det(pt.F)*pt.m/pt.ρ₀) * pt.σ ⋅ N′
+            fext = (N*pt.m)*prob.gravity
+            node.f += fint + fext
         end
     end
+
+    #=
+    Compute surface force by Neumann boundary condition
+    =#
+    for bc in prob.bforces
+        @inbounds for i in nodeindices(bc)
+            node = grid[i]
+            f = bc.f(node, t)
+            node.f += Vec(fill_missing(zero(T), f))
+        end
+    end
+end
+
+function update_nodal_mass_momentum_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+    t = tspan[1]
+    dt = tspan[2] - tspan[1]
+    grid = prob.grid
 
     #=
     Modify nodal force for Dirichelt boundary condition
@@ -60,8 +108,9 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     =#
     for bc in prob.bvels
         @inbounds for i in nodeindices(bc)
-            v = bc.v(grid[i], t)
-            grid.f[i] = Vec(fill_missing(Tuple(grid.f[i]), apply_nonmissing(zero(T), v)))
+            node = grid[i]
+            v = bc.v(node, t)
+            node.f = Vec(fill_missing(Tuple(node.f), apply_nonmissing(zero(T), v)))
         end
     end
 
@@ -74,18 +123,18 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     Update velocity and position for material points
     =#
     for pt in pts
-        pt.v = pt.v + dt * sum((node,pt) -> node.N(pt) * node.f /₀ node.m, grid, pt)
-        pt.x = pt.x + dt * sum((node,pt) -> node.N(pt) * node.mv /₀ node.m, grid, pt)
-    end
-end
-
-@inline function Base.sum(f::Function, grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
-    sum(i -> f(@inbounds(grid[i]), pt), relnodeindices(grid, pt))
-end
-
-@inline @propagate_inbounds function add!(f::Function, A::AbstractArray, grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
-    for i in relnodeindices(grid, pt)
-        A[i] += f(@inbounds(grid[i]), pt)
+        a = zero(pt.v)
+        v = zero(pt.x)
+        for i in relnodeindices(grid, pt)
+            @inbounds node = grid[i]
+            N = node.N(pt)
+            if node.m > eps(T)
+                a += N * node.f / node.m
+                v += N * node.mv / node.m
+            end
+        end
+        pt.v = pt.v + dt * a
+        pt.x = pt.x + dt * v
     end
 end
 

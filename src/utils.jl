@@ -16,5 +16,3 @@ function generateaxs(domain::AbstractMatrix{<: Real}, axsize::NTuple{dim, Int}) 
         end
     end
 end
-
-@inline /₀(x, y::Real) = y ≈ zero(y) ? zero(x) : x / y

@@ -44,7 +44,7 @@ function Solution(prob::Problem, pts::AbstractArray{MP}; dt = missing, length = 
     return Solution(prob.grid, tᵢ, pointsᵢ)
 end
 
-function solve(prob::Problem, pts::AbstractArray{MP}, alg::AbstractAlgorithm; dt::Real, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
+function solve(prob::Problem, pts::Array{<: MaterialPoint}, alg::AbstractAlgorithm; dt::Real, length = missing)
     if ismissing(length)
         solve!(Solution(prob, pts, dt = dt), prob, pts, alg; dt = dt)
     else
@@ -52,7 +52,7 @@ function solve(prob::Problem, pts::AbstractArray{MP}, alg::AbstractAlgorithm; dt
     end
 end
 
-function solve!(sol::Solution{dim, T}, prob::Problem{dim, T}, points::AbstractArray{<: MaterialPoint{dim, T}}, alg::AbstractAlgorithm; dt::Real) where {dim, T}
+function solve!(sol::Solution{dim, T}, prob::Problem{dim, T}, points::Array{<: MaterialPoint{dim, T}}, alg::AbstractAlgorithm; dt::Real) where {dim, T}
     tspan = TimeSpan(prob, dt = dt)
     ptsₙ = copy.(points)
     pts = copy.(points)

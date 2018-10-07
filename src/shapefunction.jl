@@ -1,74 +1,83 @@
-abstract type AbstractInterpolation end
+abstract type Interpolation end
+
+# Tent
+# ----
+
+struct Tent <: Interpolation end
+
+@inline function value(::Type{Tent}, xv::Real, L::Real, xp::Real, lp::Real)
+    d = abs(xp - xv)
+    d < L ? 1 - d/L : zero(d)
+end
+@inline function derivative(::Type{Tent}, xv::Real, L::Real, xp::Real, lp::Real)
+    d = abs(xp - xv)
+    sgn = sign(xp - xv)
+    d < L ? -sgn / L : zero(d)
+end
+
+
+# uGIMP
+# -----
+
+struct uGIMP <: Interpolation end
+
+@inline function value(::Type{uGIMP}, xv::Real, L::Real, xp::Real, lp::Real)
+    d = abs(xp - xv)
+    return d < lp     ? 1 - (d^2 + lp^2) / (2L*lp) :
+           d < L - lp ? 1 - d / L                  :
+           d < L + lp ? (L + lp - d)^2 / (4L*lp)   : zero(d)
+end
+@inline function derivative(::Type{uGIMP}, xv::Real, L::Real, xp::Real, lp::Real)
+    d = abs(xp - xv)
+    sgn = sign(xp - xv)
+    return d < lp     ? -sgn * d / (L*lp)            :
+           d < L - lp ? -sgn / L                     :
+           d < L + lp ? -sgn * (L+ lp - d) / (2L*lp) : zero(d)
+end
 
 #################
 # ShapeFunction #
 #################
 
-struct ShapeFunction{Interpolation <: AbstractInterpolation, dim, T}
-    interpolation::Interpolation
+struct ShapeFunction{interp <: Interpolation, dim, T}
     x::Vec{dim, T}
-    l::Vec{dim, T}
+    L::Vec{dim, T}
+end
+@inline ShapeFunction{interp}(x::Vec{dim, T}, L::Vec{dim, T}) where {interp, dim, T} = ShapeFunction{interp, dim, T}(x, L)
+
+@inline (N::ShapeFunction{interp, dim})(pt::MaterialPoint{dim}) where {interp, dim} = prod(apply(N, pt))
+
+@generated function apply(N::ShapeFunction{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
+    return quote
+        @_inline_meta
+        @inbounds @ntuple $dim i -> value(interp, N.x[i], N.L[i], pt.x[i], pt.lₚ[i])
+    end
 end
 
 #########################
 # GradientShapeFunction #
 #########################
 
-struct GradientShapeFunction{Interpolation <: AbstractInterpolation, dim, T}
-    N::ShapeFunction{Interpolation, dim, T}
+struct GradientShapeFunction{interp, dim, T}
+    body::ShapeFunction{interp, dim, T}
 end
 @inline LinearAlgebra.adjoint(N::ShapeFunction) = GradientShapeFunction(N)
-@inline (∇N::GradientShapeFunction)(pt::MaterialPoint) = gradient(∇N.N, pt)
 
-
-# LinearInterpolation
-# -------------------
-
-struct LinearInterpolation <: AbstractInterpolation end
-
-@generated function value(N::ShapeFunction{LinearInterpolation, dim}, x::Vec{dim}) where {dim}
+@generated function apply(∇N::GradientShapeFunction{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
     return quote
         @_inline_meta
-        @inbounds prod(@ntuple $dim i -> begin
-                           l = N.l[i]
-                           d = abs(x[i] - N.x[i])
-                           d < l ? 1 - d / l : zero(d)
-                       end)
+        @inbounds @ntuple $dim i -> derivative(interp, ∇N.body.x[i], ∇N.body.L[i], pt.x[i], pt.lₚ[i])
     end
 end
-@inline (N::ShapeFunction{LinearInterpolation})(pt::MaterialPoint) = value(N, pt.x)
 
-@inline function TensorArrays.gradient(N::ShapeFunction{LinearInterpolation}, x::Vec)
-    gradient(x -> value(N, x), x)
-end
-@inline function TensorArrays.gradient(N::ShapeFunction{LinearInterpolation}, pt::MaterialPoint)
-    gradient(N, pt.x)
-end
-
-
-# GeneralizedInterpolation
-# ------------------------
-
-struct GeneralizedInterpolation <: AbstractInterpolation end
-
-@generated function value(N::ShapeFunction{GeneralizedInterpolation, dim}, x::Vec{dim}, lₚ_::Vec{dim}) where {dim}
+@generated function (∇N::GradientShapeFunction{interp, dim})(pt::MaterialPoint{dim}) where {interp, dim}
+    exps = map(1:dim) do d
+        Expr(:call, :*, [i == d ? :(∇Nᵢ[$i]) : :(Nᵢ[$i]) for i in 1:dim]...)
+    end
     return quote
         @_inline_meta
-        @inbounds prod(@ntuple $dim i -> begin
-                           l = N.l[i]
-                           lₚ = lₚ_[i]
-                           d = abs(x[i] - N.x[i])
-                           d < lₚ     ? 1 - (d^2+ lₚ^2) / (2l*lₚ) :
-                           d < l - lₚ ? 1 - d / l                 :
-                           d < l + lₚ ? (l + lₚ - d)^2 / (4l*lₚ)  : zero(d)
-                       end)
+        Nᵢ = apply(∇N.body, pt)
+        ∇Nᵢ = apply(∇N, pt)
+        @inbounds Vec($(exps...))
     end
-end
-@inline (N::ShapeFunction{GeneralizedInterpolation})(pt::MaterialPoint) = value(N, pt.x, pt.lₚ)
-
-@inline function TensorArrays.gradient(N::ShapeFunction{GeneralizedInterpolation}, x::Vec, lₚ::Vec)
-    gradient(x -> value(N, x, lₚ), x)
-end
-@inline function TensorArrays.gradient(N::ShapeFunction{GeneralizedInterpolation}, pt::MaterialPoint)
-    gradient(N, pt.x, pt.lₚ)
 end
