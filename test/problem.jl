@@ -12,7 +12,7 @@
                 dϵ = dt * symmetric(pt.L)
                 pt.σ = pt.σ + E * dϵ
             end
-            push!(prob, BoundaryVelocity((node, t) -> (0,), grid[1]))
+            push!(prob, FixedBoundary((node, t) -> (true,), grid[1]))
             sol = solve(prob, points, USF(), dt = dt)
             for s in sol
                 v0 = sol[1].points[1].v

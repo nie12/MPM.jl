@@ -1,14 +1,14 @@
-struct BoundaryVelocity{dim}
-    v::Function
+struct FixedBoundary{dim}
+    condition::Function
     nodeinds::Vector{CartesianIndex{dim}}
 end
 
-struct BoundaryForce{dim}
+struct NodalForceBoundary{dim}
     f::Function
     nodeinds::Vector{CartesianIndex{dim}}
 end
 
-for BoundaryType in (:BoundaryVelocity, :BoundaryForce)
+for BoundaryType in (:FixedBoundary, :NodalForceBoundary)
     @eval begin
         @inline function $BoundaryType(f::Function, node::Node)
             $BoundaryType(f, [node.cartesian])

@@ -9,7 +9,7 @@ using ProgressMeter: @showprogress
 
 export ShapeFunction, Tent, uGIMP, cpGIMP
 export Node, Grid, MaterialPoint
-export Problem, BoundaryVelocity, BoundaryForce
+export Problem, FixedBoundary, NodalForceBoundary
 export USF
 export generategrid, generatepoints, solve
 

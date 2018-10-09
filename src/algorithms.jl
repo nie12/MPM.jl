@@ -6,13 +6,13 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     t = tspan[1]
     dt = tspan[2] - tspan[1]
     reset!(prob.grid)
-    compute_nodal_mass_momentum_velocity!(prob, pts, tspan)
+    compute_nodal_mass_and_momentum!(prob, pts, tspan)
     update_stress!(prob, pts, tspan)
     compute_nodal_force!(prob, pts, tspan)
-    update_nodal_mass_momentum_velocity!(prob, pts, tspan)
+    update_particle_position_and_velocity!(prob, pts, tspan)
 end
 
-function compute_nodal_mass_momentum_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
     t = tspan[1]
     grid = prob.grid
 
@@ -29,23 +29,13 @@ function compute_nodal_mass_momentum_velocity!(prob::Problem{dim, T}, pts::Array
     end
 
     #=
-    Compute nodal velocity
+    Modify nodal momentum for fixed boundary condition
     =#
-    for node in grid
-        if node.m > eps(T)
-            node.v = node.mv / node.m
-        end
-    end
-
-    #=
-    Modify nodal velocity for Dirichlet boundary condition
-    =#
-    for bc in prob.bvels
-        @inbounds for i in nodeindices(bc)
-            node = grid[i]
-            v = bc.v(node, t)
-            node.v = Vec(fill_missing(Tuple(node.v), v))
-            node.mv = node.m * node.v
+    for bc in prob.fixedbc
+        for i in nodeindices(bc)
+            @inbounds node = grid[i]
+            isfixed = bc.condition(node, t)::NTuple{dim, Bool}
+            node.mv = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.mv[i])
         end
     end
 end
@@ -59,7 +49,10 @@ function update_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoi
         for i in relnodeindices(grid, pt)
             @inbounds node = grid[i]
             N′ = node.N'(pt)
-            L += node.v ⊗ N′
+            if node.m > eps(T)
+                v = node.mv / node.m
+                L += v ⊗ N′
+            end
         end
         pt.L = L
         pt.F += dt*L ⋅ pt.F
@@ -93,27 +86,27 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
         @inbounds for i in nodeindices(bc)
             node = grid[i]
             f = bc.f(node, t)
-            node.f += Vec(fill_missing(zero(T), f))
+            node.f += Vec(fill_missing(Tuple(node.f), f))
+        end
+    end
+
+    #=
+    Modify nodal force for fixed boundary condition
+    (assume that acceleration is zero)
+    =#
+    for bc in prob.fixedbc
+        @inbounds for i in nodeindices(bc)
+            @inbounds node = grid[i]
+            isfixed = bc.condition(node, t)::NTuple{dim, Bool}
+            node.f = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.f[i])
         end
     end
 end
 
-function update_nodal_mass_momentum_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
     t = tspan[1]
     dt = tspan[2] - tspan[1]
     grid = prob.grid
-
-    #=
-    Modify nodal force for Dirichelt boundary condition
-    (assume that acceleration is zero)
-    =#
-    for bc in prob.bvels
-        @inbounds for i in nodeindices(bc)
-            node = grid[i]
-            v = bc.v(node, t)
-            node.f = Vec(fill_missing(Tuple(node.f), apply_nonmissing(zero(T), v)))
-        end
-    end
 
     #=
     Update nodal momentum
@@ -143,18 +136,5 @@ end
     return quote
         @_inline_meta
         @inbounds @ntuple $N i -> x[i] === missing ? v[i] : x[i]
-    end
-end
-@generated function fill_missing(v::Real, x::NTuple{N, Union{Missing, Real}}) where {N}
-    return quote
-        @_inline_meta
-        @inbounds @ntuple $N i -> x[i] === missing ? v : x[i]
-    end
-end
-
-@generated function apply_nonmissing(v::Real, x::NTuple{N, Union{Missing, Real}}) where {N}
-    return quote
-        @_inline_meta
-        @inbounds @ntuple $N i -> x[i] === missing ? missing : v
     end
 end

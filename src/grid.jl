@@ -5,7 +5,6 @@ See `generategrid` to construct `Grid` type.
 struct Grid{dim, T, interp} <: AbstractArray{Node{dim, T, interp}, dim}
     axs::NTuple{dim, LinRange{T}}
     m::Array{T, dim}
-    v::Array{Vec{dim, T}, dim}
     mv::Array{Vec{dim, T}, dim}
     f::Array{Vec{dim, T}, dim}
 end
@@ -16,7 +15,7 @@ Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
 @inline function Base.getindex(grid::Grid{dim, T, interp}, cartesian::Vararg{Int, dim}) where {dim, T, interp}
     @boundscheck checkbounds(grid, cartesian...)
     N = ShapeFunction{interp}(Vec(getindex.(grid.axs, cartesian)), Vec(step.(grid.axs)))
-    return Node(CartesianIndex(cartesian), N, grid.m, grid.v, grid.mv, grid.f)
+    return Node(CartesianIndex(cartesian), N, grid.m, grid.mv, grid.f)
 end
 
 """
@@ -48,7 +47,6 @@ function generategrid(domain::AbstractMatrix{<: Real},
     T = eltype(eltype(axs))
     Grid{dim, T, typeof(interpolation)}(axs,
                                         fill(zero(T), nnodes),
-                                        fill(zero(Vec{dim, T}), nnodes),
                                         fill(zero(Vec{dim, T}), nnodes),
                                         fill(zero(Vec{dim, T}), nnodes))
 end
@@ -100,7 +98,6 @@ end
 
 function reset!(grid::Grid{dim, T}) where {dim, T}
     fill!(grid.m, zero(T))
-    fill!(grid.v, zero(Vec{dim, T}))
     fill!(grid.mv, zero(Vec{dim, T}))
     fill!(grid.f, zero(Vec{dim, T}))
     return grid

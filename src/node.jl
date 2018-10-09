@@ -2,7 +2,6 @@ struct Node{dim, T, interp} <: AbstractVector{T}
     cartesian::CartesianIndex{dim}
     N::ShapeFunction{interp, dim, T}
     m::Array{T, dim}
-    v::Array{Vec{dim, T}, dim}
     mv::Array{Vec{dim, T}, dim}
     f::Array{Vec{dim, T}, dim}
 end
@@ -14,8 +13,6 @@ end
     @inbounds begin
         if name == :m
             getfield(node, :m)[getfield(node, :cartesian)]
-        elseif name == :v
-            getfield(node, :v)[getfield(node, :cartesian)]
         elseif name == :mv
             getfield(node, :mv)[getfield(node, :cartesian)]
         elseif name == :f
@@ -34,8 +31,6 @@ end
     @inbounds begin
         if name == :m
             getfield(node, :m)[getfield(node, :cartesian)] = v
-        elseif name == :v
-            getfield(node, :v)[getfield(node, :cartesian)] = v
         elseif name == :mv
             getfield(node, :mv)[getfield(node, :cartesian)] = v
         elseif name == :f
