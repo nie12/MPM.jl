@@ -10,7 +10,7 @@ using ProgressMeter: @showprogress
 export ShapeFunction, Tent, uGIMP, cpGIMP
 export Node, Grid, MaterialPoint
 export Problem, FixedBoundary, NodalForceBoundary
-export USF
+export USF, USL, MUSL
 export generategrid, generatepoints, solve
 
 include("utils.jl")

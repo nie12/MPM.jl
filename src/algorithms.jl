@@ -1,19 +1,37 @@
-abstract type AbstractAlgorithm end
+abstract type Algorithm end
 
-struct USF <: AbstractAlgorithm end
+struct USF  <: Algorithm end
+struct USL  <: Algorithm end
+struct MUSL <: Algorithm end
 
-function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{Real,Real}) where {dim, T}
-    t = tspan[1]
-    dt = tspan[2] - tspan[1]
+function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{T, T}) where {dim, T}
     reset!(prob.grid)
     compute_nodal_mass_and_momentum!(prob, pts, tspan)
-    update_stress!(prob, pts, tspan)
+    update_particle_stress!(prob, pts, tspan)
     compute_nodal_force!(prob, pts, tspan)
     update_particle_position_and_velocity!(prob, pts, tspan)
 end
+function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USL, tspan::Tuple{T, T}) where {dim, T}
+    reset!(prob.grid)
+    compute_nodal_mass_and_momentum!(prob, pts, tspan)
+    compute_nodal_force!(prob, pts, tspan)
+    update_particle_position_and_velocity!(prob, pts, tspan)
+    update_particle_stress!(prob, pts, tspan)
+end
+function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::MUSL, tspan::Tuple{T, T}) where {dim, T}
+    @inbounds if prob.tspan[1] == tspan[1]
+        reset!(prob.grid)
+        compute_nodal_mass_and_momentum!(prob, pts, tspan)
+    end
+    compute_nodal_force!(prob, pts, tspan)
+    update_particle_position_and_velocity!(prob, pts, tspan)
+    reset!(prob.grid)
+    compute_nodal_mass_and_momentum!(prob, pts, tspan)
+    update_particle_stress!(prob, pts, tspan)
+end
 
 function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
-    t = tspan[1]
+    @inbounds t = tspan[1]
     grid = prob.grid
 
     #=
@@ -40,8 +58,8 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
     end
 end
 
-function update_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {interp, dim, T}
-    dt = tspan[2] - tspan[1]
+function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {interp, dim, T}
+    @inbounds dt = tspan[2] - tspan[1]
     grid = prob.grid
 
     for pt in pts
@@ -62,7 +80,7 @@ function update_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoi
 end
 
 function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
-    t = tspan[1]
+    @inbounds t = tspan[1]
     grid = prob.grid
 
     #=
@@ -104,14 +122,13 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
 end
 
 function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
-    t = tspan[1]
-    dt = tspan[2] - tspan[1]
+    @inbounds dt = tspan[2] - tspan[1]
     grid = prob.grid
 
     #=
     Update nodal momentum
     =#
-    @. grid.mv = grid.mv + dt * grid.f
+    @. grid.mv += dt * grid.f
 
     #=
     Update velocity and position for material points
@@ -127,8 +144,8 @@ function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Arra
                 v += N * node.mv / node.m
             end
         end
-        pt.v = pt.v + dt * a
-        pt.x = pt.x + dt * v
+        pt.v += dt * a
+        pt.x += dt * v
     end
 end
 
