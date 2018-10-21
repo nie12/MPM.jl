@@ -39,22 +39,22 @@ struct cpGIMP <: GIMP end
         @_inline_meta
         U² = pt.F' ⋅ pt.F
         @inbounds pt.lp = Vec(@ntuple $dim i -> pt.lp₀[i] * √U²[i,i])
-         # @inbounds pt.lp = Vec(@ntuple $dim i -> pt.lp₀[i] * pt.F[i,i]) # this is original
+        # @inbounds pt.lp = Vec(@ntuple $dim i -> pt.lp₀[i] * pt.F[i,i]) # this is original
     end
 end
 
 @inline function value(::Type{<: GIMP}, xv::Real, L::Real, xp::Real, lp::Real)
-    d = abs(xp - xv)
-    return d < lp     ? 1 - (d^2 + lp^2) / (2L*lp) :
-           d < L - lp ? 1 - d / L                  :
-           d < L + lp ? (L + lp - d)^2 / (4L*lp)   : zero(d)
+    bounds = (xp - lp - xv, xp + lp - xv)
+    lhs = clamp.(bounds, -L, 0)
+    rhs = clamp.(bounds,  0, L)
+    A = @inbounds begin
+        (2 + (lhs[1] + lhs[2])/L) * (lhs[2]-lhs[1]) / 2 +
+        (2 - (rhs[1] + rhs[2])/L) * (rhs[2]-rhs[1]) / 2
+    end
+    return A / 2lp
 end
-@inline function derivative(::Type{<: GIMP}, xv::Real, L::Real, xp::Real, lp::Real)
-    d = abs(xp - xv)
-    sgn = sign(xp - xv)
-    return d < lp     ? -sgn * d / (L*lp)            :
-           d < L - lp ? -sgn / L                     :
-           d < L + lp ? -sgn * (L+ lp - d) / (2L*lp) : zero(d)
+@inline function derivative(::Type{interp}, xv::Real, L::Real, xp::Real, lp::Real) where {interp <: GIMP}
+    gradient(xp -> value(interp, xv, L, xp, lp), xp)
 end
 
 

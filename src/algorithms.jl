@@ -38,7 +38,7 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
     Compute nodal mass and nodal momentum
     =#
     for pt in pts
-        for i in relnodeindices(grid, pt)
+        for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
             N = node.N(pt)
             node.m += N * pt.m
@@ -64,7 +64,7 @@ function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: Ma
 
     for pt in pts
         L = zero(pt.L)
-        for i in relnodeindices(grid, pt)
+        for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
             N′ = node.N'(pt)
             if node.m > eps(T)
@@ -87,7 +87,7 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     Compute internal force and gravity force
     =#
     for pt in pts
-        for i in relnodeindices(grid, pt)
+        for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
             N = node.N(pt)
             N′ = node.N'(pt)
@@ -136,7 +136,7 @@ function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Arra
     for pt in pts
         a = zero(pt.v)
         v = zero(pt.x)
-        for i in relnodeindices(grid, pt)
+        for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
             N = node.N(pt)
             if node.m > eps(T)

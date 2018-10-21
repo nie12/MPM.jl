@@ -55,58 +55,40 @@ end
 @inline @propagate_inbounds maxaxis(grid::Grid, d::Int) = last(grid.axs[d])
 @inline @propagate_inbounds stepaxis(grid::Grid, d::Int) = step(grid.axs[d])
 
-@inline nelements(grid::Grid) = map(i -> i - 1, size(grid))
-@inline eachelement(grid::Grid) = CartesianIndices(nelements(grid))
-
-"""
-    whichelement(::Grid, pt::MaterialPoint)
-
-Return the element index in which the material point `pt` is located.
-"""
-@generated function whichelement(grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
+@generated function neighbor_nodeindices(grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
     return quote
         @_inline_meta
-        @inbounds return CartesianIndex(@ntuple $dim i -> whichelement(minaxis(grid, i), stepaxis(grid, i), pt.x[i]))
-    end
-end
-@inline whichelement(x_min::Real, Δx::Real, x::Real) = floor(Int, (x - x_min) / Δx) + 1
-
-@generated function relnodeindices(grid::Grid{dim, T, Tent}, pt::MaterialPoint{dim}) where {dim, T}
-    return quote
-        @_inline_meta
-        eltindex = whichelement(grid, pt)
-        sz = size(grid)
         @inbounds CartesianIndices(@ntuple $dim i -> begin
-                                       start = eltindex[i]
-                                       stop = eltindex[i] + 1
-                                       (1 < start ? start : 1):(sz[i] > stop ? stop : sz[i])
+                                       min = minaxis(grid, i)
+                                       step = stepaxis(grid, i)
+                                       rng = clamp.(neighbor_range(min, step, pt.x[i], pt.lp[i]), 1, size(grid, i))
+                                       rng[1]:rng[2]
                                    end)
     end
 end
-@generated function relnodeindices(grid::Grid{dim, T, <: GIMP}, pt::MaterialPoint{dim}) where {dim, T}
-    return quote
-        @_inline_meta
-        eltindex = whichelement(grid, pt)
-        sz = size(grid)
-        @inbounds CartesianIndices(@ntuple $dim i -> begin
-                                       start = eltindex[i] - 1
-                                       stop = eltindex[i] + 2
-                                       (1 < start ? start : 1):(sz[i] > stop ? stop : sz[i])
-                                   end)
+@inline function neighbor_range(x_min::Real, Δx::Real, x::Real, lp::Real)
+    @inbounds begin
+        start = _bothsides(x_min, Δx, x - (Δx + lp))[2]
+        stop  = _bothsides(x_min, Δx, x + (Δx + lp))[1]
+        return (start, stop)
     end
+end
+@inline function _bothsides(x_min::Real, Δx::Real, x::Real)
+    i = floor(Int, (x - x_min) / Δx) + 1
+    return (i, i+1)
 end
 
 function reset!(grid::Grid{dim, T}) where {dim, T}
-    fill!(grid.m, zero(T))
+    fill!(grid.m,  zero(T))
     fill!(grid.mv, zero(Vec{dim, T}))
-    fill!(grid.f, zero(Vec{dim, T}))
+    fill!(grid.f,  zero(Vec{dim, T}))
     return grid
 end
 
 function generatepoints(f::Function,
-                        grid::Grid{dim, T},
+                        grid::Grid{dim, T, interp},
                         domain::AbstractMatrix{<: Real},
-                        npts::Vararg{Int, dim}) where {dim, T}
+                        npts::Vararg{Int, dim}) where {dim, T, interp}
     # find indices of `grid.axs` from given domain
     domaininds = Array{Int}(undef, size(domain))
     map!(domaininds, CartesianIndices(domain)) do cartesian
@@ -144,8 +126,10 @@ function generatepoints(f::Function,
     Vₚ = V / prod(npts)
     for pt in pts
         pt.m = pt.ρ₀ * Vₚ
-        pt.lp₀ = Vec(map(/, step.(grid.axs), 2 .* npts))
-        pt.lp = pt.lp₀
+        if interp <: GIMP
+            pt.lp₀ = Vec(map(/, step.(grid.axs), 2 .* npts))
+            pt.lp = pt.lp₀
+        end
     end
     return pts
 end
