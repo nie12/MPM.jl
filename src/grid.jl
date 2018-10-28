@@ -7,6 +7,8 @@ struct Grid{dim, T, interp} <: AbstractArray{Node{dim, T, interp}, dim}
     m::Array{T, dim}
     mv::Array{Vec{dim, T}, dim}
     f::Array{Vec{dim, T}, dim}
+    fixedbounds::Vector{BoundaryCondition{FixedBoundary, dim}}
+    forcebounds::Vector{BoundaryCondition{NodalForceBoundary, dim}}
 end
 
 Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
@@ -48,7 +50,9 @@ function generategrid(domain::AbstractMatrix{<: Real},
     Grid{dim, T, typeof(interpolation)}(axs,
                                         fill(zero(T), nnodes),
                                         fill(zero(Vec{dim, T}), nnodes),
-                                        fill(zero(Vec{dim, T}), nnodes))
+                                        fill(zero(Vec{dim, T}), nnodes),
+                                        BoundaryCondition{FixedBoundary, dim}[],
+                                        BoundaryCondition{NodalForceBoundary, dim}[])
 end
 
 @inline @propagate_inbounds minaxis(grid::Grid, d::Int) = first(grid.axs[d])
@@ -68,12 +72,12 @@ end
 end
 @inline function neighbor_range(x_min::Real, Δx::Real, x::Real, lp::Real)
     @inbounds begin
-        start = _bothsides(x_min, Δx, x - (Δx + lp))[2]
-        stop  = _bothsides(x_min, Δx, x + (Δx + lp))[1]
+        start = surroundings(x_min, Δx, x - (Δx + lp))[2]
+        stop  = surroundings(x_min, Δx, x + (Δx + lp))[1]
         return (start, stop)
     end
 end
-@inline function _bothsides(x_min::Real, Δx::Real, x::Real)
+@inline function surroundings(x_min::Real, Δx::Real, x::Real)
     i = floor(Int, (x - x_min) / Δx) + 1
     return (i, i+1)
 end
@@ -132,4 +136,23 @@ function generatepoints(f::Function,
         end
     end
     return pts
+end
+
+@inline function add!(f::Function, grid::Grid, bound::FixedBoundary)
+    bc = BoundaryCondition{FixedBoundary}(size(grid))
+    @inbounds for i in eachindex(grid)
+        if f(grid[i]) == true
+            bc[i] = bound
+        end
+    end
+    push!(grid.fixedbounds, bc)
+end
+@inline function add!(f::Function, grid::Grid, bound::NodalForceBoundary)
+    bc = BoundaryCondition{NodalForceBoundary}(size(grid))
+    @inbounds for i in eachindex(grid)
+        if f(grid[i]) == true
+            bc[i] = bound
+        end
+    end
+    push!(grid.forcebounds, bc)
 end

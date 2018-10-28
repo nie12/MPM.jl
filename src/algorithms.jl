@@ -49,10 +49,10 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
     #=
     Modify nodal momentum for fixed boundary condition
     =#
-    for bc in prob.fixedbc
+    for bc in grid.fixedbounds
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            isfixed = bc.condition(node, t)::NTuple{dim, Bool}
+            isfixed = bc[i](node, t)
             node.mv = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.mv[i])
         end
     end
@@ -100,10 +100,10 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     #=
     Compute surface force by Neumann boundary condition
     =#
-    for bc in prob.bforces
-        @inbounds for i in nodeindices(bc)
-            node = grid[i]
-            f = bc.f(node, t)
+    for bc in grid.forcebounds
+        for i in nodeindices(bc)
+            @inbounds node = grid[i]
+            f = bc[i](node, t)
             node.f += Vec(fill_missing(Tuple(node.f), f))
         end
     end
@@ -112,10 +112,10 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     Modify nodal force for fixed boundary condition
     (assume that acceleration is zero)
     =#
-    for bc in prob.fixedbc
-        @inbounds for i in nodeindices(bc)
+    for bc in grid.fixedbounds
+        for i in nodeindices(bc)
             @inbounds node = grid[i]
-            isfixed = bc.condition(node, t)::NTuple{dim, Bool}
+            isfixed = bc[i](node, t)
             node.f = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.f[i])
         end
     end

@@ -11,14 +11,14 @@ export ShapeFunction, Tent, uGIMP, cpGIMP
 export Node, Grid, MaterialPoint
 export Problem, FixedBoundary, NodalForceBoundary
 export USF, USL, MUSL
-export generategrid, generatepoints, solve
+export generategrid, generatepoints, solve, add!
 
 include("utils.jl")
 include("materialpoint.jl")
 include("shapefunction.jl")
 include("node.jl")
-include("grid.jl")
 include("boundary.jl")
+include("grid.jl")
 include("problem.jl")
 include("algorithms.jl")
 include("snapshot.jl")
