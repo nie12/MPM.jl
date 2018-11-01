@@ -128,7 +128,9 @@ function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Arra
     #=
     Update nodal momentum
     =#
-    @. grid.mv += dt * grid.f
+    for node in grid
+        node.mv += dt * node.f
+    end
 
     #=
     Update velocity and position for material points

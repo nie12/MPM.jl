@@ -4,9 +4,7 @@ See `generategrid` to construct `Grid` type.
 """
 struct Grid{dim, T, interp} <: AbstractArray{Node{dim, T, interp}, dim}
     axs::NTuple{dim, LinRange{T}}
-    m::Array{T, dim}
-    mv::Array{Vec{dim, T}, dim}
-    f::Array{Vec{dim, T}, dim}
+    nodes::Array{Node{dim, T, interp}, dim}
     fixedbounds::Vector{BoundaryCondition{FixedBoundary, dim}}
     forcebounds::Vector{BoundaryCondition{NodalForceBoundary, dim}}
 end
@@ -16,8 +14,7 @@ Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
 @inline Base.size(grid::Grid) = map(length, grid.axs)
 @inline function Base.getindex(grid::Grid{dim, T, interp}, cartesian::Vararg{Int, dim}) where {dim, T, interp}
     @boundscheck checkbounds(grid, cartesian...)
-    N = ShapeFunction{interp}(Vec(getindex.(grid.axs, cartesian)), Vec(step.(grid.axs)))
-    return Node(CartesianIndex(cartesian), N, grid.m, grid.mv, grid.f)
+    @inbounds grid.nodes[cartesian...]
 end
 
 """
@@ -44,15 +41,17 @@ julia> generategrid([0 1; 0 2], 2, 4)
 function generategrid(domain::AbstractMatrix{<: Real},
                       nelts::Vararg{Int, dim};
                       interpolation::Interpolation) where {dim}
+    interp = typeof(interpolation)
     nnodes = map(i -> i + 1, nelts)
     axs = generateaxs(domain, nnodes)
     T = eltype(eltype(axs))
-    Grid{dim, T, typeof(interpolation)}(axs,
-                                        fill(zero(T), nnodes),
-                                        fill(zero(Vec{dim, T}), nnodes),
-                                        fill(zero(Vec{dim, T}), nnodes),
-                                        BoundaryCondition{FixedBoundary, dim}[],
-                                        BoundaryCondition{NodalForceBoundary, dim}[])
+    nodes = map(CartesianIndices(nnodes)) do cartesian
+        N = ShapeFunction{interp}(Vec(getindex.(axs, Tuple(cartesian))), Vec(step.(axs)))
+        return Node(N)
+    end
+    Grid{dim, T, interp}(axs, nodes,
+                         BoundaryCondition{FixedBoundary, dim}[],
+                         BoundaryCondition{NodalForceBoundary, dim}[])
 end
 
 @inline @propagate_inbounds minaxis(grid::Grid, d::Int) = first(grid.axs[d])
@@ -82,12 +81,7 @@ end
     return (i, i+1)
 end
 
-function reset!(grid::Grid{dim, T}) where {dim, T}
-    fill!(grid.m,  zero(T))
-    fill!(grid.mv, zero(Vec{dim, T}))
-    fill!(grid.f,  zero(Vec{dim, T}))
-    return grid
-end
+@inline reset!(grid::Grid) = reset!.(grid)
 
 function generatepoints(f::Function,
                         grid::Grid{dim, T, interp},

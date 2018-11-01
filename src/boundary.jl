@@ -6,7 +6,6 @@ end
 @inline function (b::FixedBoundary)(node::Node{dim}, t::Real) where {dim}
     b.f(node, t)::NTuple{dim, Bool}
 end
-@inline Broadcast.broadcastable(b::FixedBoundary) = Ref(b)
 
 struct NodalForceBoundary <: AbstractBoundary
     f::Function
