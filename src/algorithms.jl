@@ -52,7 +52,7 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
     for bc in grid.fixedbounds
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            isfixed = bc[i](node, t)
+            isfixed = bc(node, t)
             node.mv = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.mv[i])
         end
     end
@@ -103,8 +103,8 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     for bc in grid.forcebounds
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            f = bc[i](node, t)
-            node.f += Vec(fill_missing(Tuple(node.f), f))
+            f = bc(node, t)
+            node.f += Vec{dim, T}(i -> f[i] === missing ? node.f[i] : f[i])
         end
     end
 
@@ -115,7 +115,7 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     for bc in grid.fixedbounds
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            isfixed = bc[i](node, t)
+            isfixed = bc(node, t)
             node.f = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.f[i])
         end
     end
@@ -148,12 +148,5 @@ function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Arra
         end
         pt.v += dt * a
         pt.x += dt * v
-    end
-end
-
-@generated function fill_missing(v::NTuple{N, Real}, x::NTuple{N, Union{Missing, Real}}) where {N}
-    return quote
-        @_inline_meta
-        @inbounds @ntuple $N i -> x[i] === missing ? v[i] : x[i]
     end
 end

@@ -133,20 +133,10 @@ function generatepoints(f::Function,
 end
 
 @inline function add!(f::Function, grid::Grid, bound::FixedBoundary)
-    bc = BoundaryCondition{FixedBoundary}(size(grid))
-    @inbounds for i in eachindex(grid)
-        if f(grid[i]) == true
-            bc[i] = bound
-        end
-    end
-    push!(grid.fixedbounds, bc)
+    nodeinds = [cartesian for cartesian in CartesianIndices(grid) if f(grid[cartesian]) == true]
+    push!(grid.fixedbounds, BoundaryCondition(bound, nodeinds))
 end
 @inline function add!(f::Function, grid::Grid, bound::NodalForceBoundary)
-    bc = BoundaryCondition{NodalForceBoundary}(size(grid))
-    @inbounds for i in eachindex(grid)
-        if f(grid[i]) == true
-            bc[i] = bound
-        end
-    end
-    push!(grid.forcebounds, bc)
+    nodeinds = [cartesian for cartesian in CartesianIndices(grid) if f(grid[cartesian]) == true]
+    push!(grid.forcebounds, BoundaryCondition(bound, nodeinds))
 end
