@@ -21,18 +21,16 @@ end
 
 
 struct Solution{dim, T, N, M, Ms} <: AbstractVector{SnapShot{dim, T, N, M, Ms}}
-    grid::Grid{dim, T}
+    axs::NTuple{dim, LinRange{T}}
     tᵢ::TimeSpan{T}
     pointsᵢ::Vector{Array{MaterialPoint{dim, T, M, Ms}, N}}
 end
 
 @inline Base.size(sol::Solution) = size(sol.tᵢ)
-@generated function Base.getindex(sol::Solution{dim}, i::Int) where {dim}
-    return quote
-        steps = @ntuple $dim i -> stepaxis(sol.grid, i)
-        limits = @ntuple $dim i -> (minaxis(sol.grid, i), maxaxis(sol.grid, i))
-        SnapShot(steps, limits, sol.tᵢ[i], sol.pointsᵢ[i])
-    end
+@inline function Base.getindex(sol::Solution, i::Int)
+    steps = step.(sol.axs)
+    limits = extrema.(sol.axs)
+    SnapShot(steps, limits, sol.tᵢ[i], sol.pointsᵢ[i])
 end
 
 function Solution(prob::Problem, pts::AbstractArray{MP}; dt = missing, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
@@ -41,7 +39,7 @@ function Solution(prob::Problem, pts::AbstractArray{MP}; dt = missing, length = 
     @inbounds for i in eachindex(pointsᵢ)
         pointsᵢ[i] = copy.(pts)
     end
-    return Solution(prob.grid, tᵢ, pointsᵢ)
+    return Solution(prob.grid.axs, tᵢ, pointsᵢ)
 end
 
 function solve(prob::Problem, pts::Array{<: MaterialPoint}, alg::Algorithm; dt::Real, length = missing)
