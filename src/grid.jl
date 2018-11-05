@@ -5,8 +5,8 @@ See `generategrid` to construct `Grid` type.
 struct Grid{dim, T, interp} <: AbstractArray{Node{dim, T, interp}, dim}
     axs::NTuple{dim, LinRange{T}}
     nodes::Array{Node{dim, T, interp}, dim}
-    fixedbounds::Vector{BoundaryCondition{FixedBoundary, dim}}
-    forcebounds::Vector{BoundaryCondition{NodalForceBoundary, dim}}
+    dirichlets::Vector{BoundaryCondition{DirichletBoundary, dim}}
+    neumanns::Vector{BoundaryCondition{NeumannBoundary, dim}}
 end
 
 Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
@@ -46,15 +46,14 @@ function generategrid(domain::AbstractMatrix{<: Real},
     axs = generateaxs(domain, nnodes)
     T = eltype(eltype(axs))
     nodes = map(CartesianIndices(nnodes)) do cartesian
-        N = ShapeFunction(ntuple(Val(dim)) do d
-                              ax = axs[d]
-                              LineShape{interp, T}(ax[cartesian[d]], step(axs[d]))
-                          end)
+        xs = getindex.(axs, Tuple(cartesian))
+        Ls = step.(axs)
+        N = ShapeFunction(LineShape{interp}.(xs, Ls))
         return Node(N)
     end
     Grid{dim, T, interp}(axs, nodes,
-                         BoundaryCondition{FixedBoundary, dim}[],
-                         BoundaryCondition{NodalForceBoundary, dim}[])
+                         BoundaryCondition{DirichletBoundary, dim}[],
+                         BoundaryCondition{NeumannBoundary, dim}[])
 end
 
 @inline @propagate_inbounds minaxis(grid::Grid, d::Int) = first(grid.axs[d])
@@ -64,10 +63,10 @@ end
 @generated function neighbor_nodeindices(grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
     return quote
         @_inline_meta
-        @inbounds CartesianIndices(@ntuple $dim i -> begin
-                                       min = minaxis(grid, i)
-                                       step = stepaxis(grid, i)
-                                       rng = clamp.(neighbor_range(min, step, pt.x[i], pt.lp[i]), 1, size(grid, i))
+        @inbounds CartesianIndices(@ntuple $dim d -> begin
+                                       min = minaxis(grid, d)
+                                       step = stepaxis(grid, d)
+                                       rng = clamp.(neighbor_range(min, step, pt.x[d], pt.lp[d]), 1, size(grid, d))
                                        rng[1]:rng[2]
                                    end)
     end
@@ -135,11 +134,28 @@ function generatepoints(f::Function,
     return pts
 end
 
-@inline function add!(f::Function, grid::Grid, bound::FixedBoundary)
+@inline function add!(f::Function, grid::Grid, bound::DirichletBoundary)
     nodeinds = [cartesian for cartesian in CartesianIndices(grid) if f(grid[cartesian]) == true]
-    push!(grid.fixedbounds, BoundaryCondition(bound, nodeinds))
+    push!(grid.dirichlets, BoundaryCondition(bound, nodeinds))
 end
-@inline function add!(f::Function, grid::Grid, bound::NodalForceBoundary)
+@inline function add!(f::Function, grid::Grid, bound::NeumannBoundary)
     nodeinds = [cartesian for cartesian in CartesianIndices(grid) if f(grid[cartesian]) == true]
-    push!(grid.forcebounds, BoundaryCondition(bound, nodeinds))
+    push!(grid.neumanns, BoundaryCondition(bound, nodeinds))
+end
+
+@generated function update_dirichlet!(grid::Grid{dim, T}, tspan::Tuple{T, T}) where {dim, T}
+    return quote
+        @inbounds t = tspan[1]
+        for node in grid
+            setdirichlet!(node.N, @ntuple $dim d -> FREE)
+        end
+        for bc in grid.dirichlets
+            for i in nodeindices(bc)
+                @inbounds node = grid[i]
+                cond = bc(node, t)
+                current = getdirichlet(node.N)
+                setdirichlet!(node.N, @inbounds @ntuple $dim d -> cond[d] * current[d])
+            end
+        end
+    end
 end

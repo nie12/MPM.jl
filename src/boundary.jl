@@ -1,10 +1,10 @@
 abstract type AbstractBoundary end
 
-struct FixedBoundary <: AbstractBoundary
+struct DirichletBoundary <: AbstractBoundary
     f::Function
 end
 
-struct NodalForceBoundary <: AbstractBoundary
+struct NeumannBoundary <: AbstractBoundary
     f::Function
 end
 
@@ -15,10 +15,10 @@ end
 
 @inline nodeindices(bc::BoundaryCondition) = bc.nodeinds
 
-@inline function (bc::BoundaryCondition{FixedBoundary, dim})(node::Node{dim}, t::Real) where {dim}
-    bc.bound.f(node, t)::NTuple{dim, Bool}
+@inline function (bc::BoundaryCondition{DirichletBoundary, dim})(node::Node{dim}, t::Real) where {dim}
+    bc.bound.f(node, t)::NTuple{dim, Dirichlet}
 end
 
-@inline function (bc::BoundaryCondition{NodalForceBoundary, dim})(node::Node{dim}, t::Real) where {dim}
+@inline function (bc::BoundaryCondition{NeumannBoundary, dim})(node::Node{dim}, t::Real) where {dim}
     bc.bound.f(node, t)::NTuple{dim, Real}
 end

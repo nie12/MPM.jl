@@ -12,7 +12,7 @@
                 dt = 0.005 # Small time increment should be used in USL for a single particle problem
             end
             grid = @inferred generategrid(T[0 L], 1; interpolation = Tent())
-            add!(node -> node[1] == 0.0, grid, FixedBoundary((node, t) -> (true,)))
+            add!(node -> node[1] == 0.0, grid, DirichletBoundary((node, t) -> (FIXED,)))
             points = @inferred generatepoints(x -> MaterialPoint(x = x, ρ₀ = 1, v = Vec(0.1)), grid, T[0 L], 1)
             prob = Problem(grid, (0, 100dt)) do pt, dt
                 dϵ = dt * symmetric(pt.L)

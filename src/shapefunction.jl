@@ -31,9 +31,23 @@ end
 # LineShape #
 #############
 
-struct LineShape{interp <: Interpolation, T}
+@enum Dirichlet begin
+    FREE = 100
+    FIXED = 0
+    RFIXED = -1
+    LFIXED =  1
+end
+
+@inline Base.:*(x::Dirichlet, y::Dirichlet) = abs(Int(x)) < abs(Int(y)) ? x : y
+
+mutable struct LineShape{interp <: Interpolation, T}
     x::T
     L::T
+    dirichlet::Dirichlet
+end
+@inline function LineShape{interp}(x::Real, y::Real) where {interp}
+    T = promote_type(typeof(x), typeof(y))
+    LineShape{interp, T}(x, y, FREE)
 end
 
 @inline function derivative(shape::LineShape, xp::Real, lp::Real)
@@ -80,6 +94,21 @@ end
     return quote
         @_inline_meta
         @inbounds @ntuple $dim i -> value(N[i], pt.x[i], pt.lp[i])
+    end
+end
+
+@generated function setdirichlet!(N::ShapeFunction{interp, dim}, dirichlets::NTuple{dim, Dirichlet}) where {interp, dim}
+    return quote
+        @_inline_meta
+        @inbounds @nexprs $dim d -> N.shapes[d].dirichlet = dirichlets[d]
+        nothing
+    end
+end
+
+@generated function getdirichlet(N::ShapeFunction{interp, dim}) where {interp, dim}
+    return quote
+        @_inline_meta
+        @inbounds @ntuple $dim d -> N.shapes[d].dirichlet
     end
 end
 

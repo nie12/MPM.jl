@@ -5,7 +5,7 @@
             L = one(T)
             xp = rand(T)
             lp = rand(T)
-            shape = MPM.LineShape{interp, T}(xv, L)
+            shape = @inferred MPM.LineShape{interp}(xv, L)
             @test MPM.derivative(shape, xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(shape, xp, lp), xp)
             @test MPM.derivative(shape,  L + xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(shape,  L + xp, lp),  xp)
             @test MPM.derivative(shape, -L - xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(shape, -L + xp, lp), -xp)
@@ -19,7 +19,7 @@ end
             xi = zero(T)
             L = 2 * one(T)
             x = rand(T)
-            shape = MPM.LineShape{Tent, T}(xi, L)
+            shape = @inferred MPM.LineShape{Tent}(xi, L)
             N = ShapeFunction((shape,))
             @test (@inferred N(MaterialPoint(x =  Vec(x), ρ₀ = 1)))::T ≈ 1 - x / L
             @test (@inferred N(MaterialPoint(x = -Vec(x), ρ₀ = 1)))::T ≈ 1 - x / L

@@ -5,6 +5,7 @@ struct USL  <: Algorithm end
 struct MUSL <: Algorithm end
 
 function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{T, T}) where {dim, T}
+    update_dirichlet!(prob.grid, tspan)
     reset!(prob.grid)
     compute_nodal_mass_and_momentum!(prob, pts, tspan)
     update_particle_stress!(prob, pts, tspan)
@@ -12,6 +13,7 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     update_particle_position_and_velocity!(prob, pts, tspan)
 end
 function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USL, tspan::Tuple{T, T}) where {dim, T}
+    update_dirichlet!(prob.grid, tspan)
     reset!(prob.grid)
     compute_nodal_mass_and_momentum!(prob, pts, tspan)
     compute_nodal_force!(prob, pts, tspan)
@@ -19,6 +21,7 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     update_particle_stress!(prob, pts, tspan)
 end
 function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::MUSL, tspan::Tuple{T, T}) where {dim, T}
+    update_dirichlet!(prob.grid, tspan)
     @inbounds if prob.tspan[1] == tspan[1]
         reset!(prob.grid)
         compute_nodal_mass_and_momentum!(prob, pts, tspan)
@@ -49,11 +52,11 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
     #=
     Modify nodal momentum for fixed boundary condition
     =#
-    for bc in grid.fixedbounds
+    for bc in grid.dirichlets
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            isfixed = bc(node, t)
-            node.mv = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.mv[i])
+            cond = bc(node, t)
+            node.mv = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.mv[i])
         end
     end
 end
@@ -100,7 +103,7 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     #=
     Compute surface force by Neumann boundary condition
     =#
-    for bc in grid.forcebounds
+    for bc in grid.neumanns
         for i in nodeindices(bc)
             @inbounds node = grid[i]
             f = bc(node, t)
@@ -112,11 +115,11 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     Modify nodal force for fixed boundary condition
     (assume that acceleration is zero)
     =#
-    for bc in grid.fixedbounds
+    for bc in grid.dirichlets
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            isfixed = bc(node, t)
-            node.f = Vec{dim, T}(i -> isfixed[i] ? zero(T) : node.f[i])
+            cond = bc(node, t)
+            node.f = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.f[i])
         end
     end
 end

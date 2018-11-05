@@ -1,7 +1,7 @@
 module MPM
 
 using Base: @propagate_inbounds, @_inline_meta
-using Base.Cartesian: @ntuple
+using Base.Cartesian: @ntuple, @nexprs
 using LinearAlgebra
 using TensorArrays
 using RecipesBase
@@ -9,9 +9,10 @@ using ProgressMeter: @showprogress
 
 export ShapeFunction, Tent, uGIMP, cpGIMP
 export Node, Grid, MaterialPoint
-export Problem, FixedBoundary, NodalForceBoundary
+export Problem, DirichletBoundary, NeumannBoundary
 export USF, USL, MUSL
 export generategrid, generatepoints, solve, add!
+export FREE, FIXED
 
 include("utils.jl")
 include("materialpoint.jl")
