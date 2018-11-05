@@ -22,24 +22,24 @@ end
 
 struct Solution{dim, T, N, M, Ms} <: AbstractVector{SnapShot{dim, T, N, M, Ms}}
     axs::NTuple{dim, LinRange{T}}
-    tᵢ::TimeSpan{T}
-    pointsᵢ::Vector{Array{MaterialPoint{dim, T, M, Ms}, N}}
+    t_::TimeSpan{T}
+    pts_::Vector{Array{MaterialPoint{dim, T, M, Ms}, N}}
 end
 
-@inline Base.size(sol::Solution) = size(sol.tᵢ)
+@inline Base.size(sol::Solution) = size(sol.t_)
 @inline function Base.getindex(sol::Solution, i::Int)
     steps = step.(sol.axs)
     limits = extrema.(sol.axs)
-    SnapShot(steps, limits, sol.tᵢ[i], sol.pointsᵢ[i])
+    SnapShot(steps, limits, sol.t_[i], sol.pts_[i])
 end
 
 function Solution(prob::Problem, pts::AbstractArray{MP}; dt = missing, length = missing) where {dim, T, MP <: MaterialPoint{dim, T}}
-    tᵢ = TimeSpan(prob, dt = dt, length = length)
-    pointsᵢ = Array{typeof(pts)}(undef, size(tᵢ))
-    @inbounds for i in eachindex(pointsᵢ)
-        pointsᵢ[i] = copy.(pts)
+    t_ = TimeSpan(prob, dt = dt, length = length)
+    pts_ = Array{typeof(pts)}(undef, size(t_))
+    @inbounds for i in eachindex(pts_)
+        pts_[i] = copy.(pts)
     end
-    return Solution(prob.grid.axs, tᵢ, pointsᵢ)
+    return Solution(prob.grid.axs, t_, pts_)
 end
 
 function solve(prob::Problem, pts::Array{<: MaterialPoint}, alg::Algorithm; dt::Real, length = missing)
@@ -59,7 +59,7 @@ function solve!(sol::Solution{dim, T}, prob::Problem{dim, T}, points::Array{<: M
         tₙ = tspan[i-1]
         t = tspan[i]
         update!(prob, pts, alg, (tₙ, t))
-        while checkbounds(Bool, sol.tᵢ, count) && tₙ ≤ sol.tᵢ[count] ≤ t
+        while checkbounds(Bool, sol.t_, count) && tₙ ≤ sol.t_[count] ≤ t
             interpolate!(sol[count], (tₙ, ptsₙ), (t, pts))
             count += 1
         end
@@ -72,7 +72,7 @@ function (sol::Solution{dim, T})(t_::Real) where {dim, T}
     t = T(t_)
     t ≤ sol[1].t   && return sol[1]
     t ≥ sol[end].t && return sol[end]
-    i = findfirst(tᵢ -> t < tᵢ, sol.tᵢ)
+    i = findfirst(t_ -> t < t_, sol.t_)
     out = similar(sol[1])
     out.t = t
     interpolate!(out, (sol[i-1].t, sol[i-1].points), (sol[i].t, sol[i].points))
