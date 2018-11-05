@@ -6,12 +6,14 @@ abstract type Interpolation end
 
 struct Tent <: Interpolation end
 
+@inline neighbor_element(::Type{Tent}, i::Int) = i:i
 @inline update_particle_domain!(pt::MaterialPoint, ::Type{Tent}) = nothing
 
 abstract type GIMP <: Interpolation end
 struct uGIMP  <: GIMP end
 struct cpGIMP <: GIMP end
 
+@inline neighbor_element(::Type{<: GIMP}, i::Int) = i-1:i+1
 @inline update_particle_domain!(pt::MaterialPoint, ::Type{uGIMP}) = nothing
 @generated function update_particle_domain!(pt::MaterialPoint{dim}, ::Type{cpGIMP}) where {dim}
     # Charlton, T. J., W. M. Coombs, and C. E. Augarde.

@@ -2,17 +2,28 @@
 `Grid` is a subtype of `AbstractArray` which stores nodes with linear nodal spacing.
 See `generategrid` to construct `Grid` type.
 """
-struct Grid{dim, T, interp} <: AbstractArray{Node{dim, T, interp}, dim}
+struct Grid{interp, dim, T} <: AbstractArray{Node{dim, T, interp}, dim}
     axs::NTuple{dim, LinRange{T}}
     nodes::Array{Node{dim, T, interp}, dim}
     dirichlets::Vector{BoundaryCondition{DirichletBoundary, dim}}
     neumanns::Vector{BoundaryCondition{NeumannBoundary, dim}}
 end
+function Grid{interp}(axs::NTuple{dim, LinRange{T}}) where {interp, dim, T}
+    nodes = map(CartesianIndices(length.(axs))) do cartesian
+        xs = getindex.(axs, Tuple(cartesian))
+        Ls = step.(axs)
+        N = ShapeFunction(LineShape{interp}.(xs, Ls))
+        return Node(N)
+    end
+    Grid{interp, dim, T}(axs, nodes,
+                         BoundaryCondition{DirichletBoundary, dim}[],
+                         BoundaryCondition{NeumannBoundary, dim}[])
+end
 
 Base.IndexStyle(::Type{<: Grid}) = IndexCartesian()
 
 @inline Base.size(grid::Grid) = map(length, grid.axs)
-@inline function Base.getindex(grid::Grid{dim, T, interp}, cartesian::Vararg{Int, dim}) where {dim, T, interp}
+@inline function Base.getindex(grid::Grid{interp, dim}, cartesian::Vararg{Int, dim}) where {interp, dim}
     @boundscheck checkbounds(grid, cartesian...)
     @inbounds grid.nodes[cartesian...]
 end
@@ -38,55 +49,30 @@ julia> generategrid([0 1; 0 2], 2, 4)
  [1.0, 0.0]  [1.0, 0.5]  [1.0, 1.0]  [1.0, 1.5]  [1.0, 2.0]
 ```
 """
-function generategrid(domain::AbstractMatrix{<: Real},
-                      nelts::Vararg{Int, dim};
-                      interpolation::Interpolation) where {dim}
-    interp = typeof(interpolation)
+function generategrid(::interp, domain::AbstractMatrix{<: Real}, nelts::Vararg{Int, dim}) where {interp, dim}
     nnodes = map(i -> i + 1, nelts)
     axs = generateaxs(domain, nnodes)
-    T = eltype(eltype(axs))
-    nodes = map(CartesianIndices(nnodes)) do cartesian
-        xs = getindex.(axs, Tuple(cartesian))
-        Ls = step.(axs)
-        N = ShapeFunction(LineShape{interp}.(xs, Ls))
-        return Node(N)
-    end
-    Grid{dim, T, interp}(axs, nodes,
-                         BoundaryCondition{DirichletBoundary, dim}[],
-                         BoundaryCondition{NeumannBoundary, dim}[])
+    return Grid{interp}(axs)
 end
 
-@inline @propagate_inbounds minaxis(grid::Grid, d::Int) = first(grid.axs[d])
-@inline @propagate_inbounds maxaxis(grid::Grid, d::Int) = last(grid.axs[d])
-@inline @propagate_inbounds stepaxis(grid::Grid, d::Int) = step(grid.axs[d])
-
-@generated function neighbor_nodeindices(grid::Grid{dim}, pt::MaterialPoint{dim}) where {dim}
+@generated function neighbor_nodeindices(grid::Grid{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
     return quote
         @_inline_meta
-        @inbounds CartesianIndices(@ntuple $dim d -> begin
-                                       min = minaxis(grid, d)
-                                       step = stepaxis(grid, d)
-                                       rng = clamp.(neighbor_range(min, step, pt.x[d], pt.lp[d]), 1, size(grid, d))
-                                       rng[1]:rng[2]
-                                   end)
+        CartesianIndices(@inbounds @ntuple $dim d -> begin
+                             ax = grid.axs[d]
+                             rng = neighbor_element(interp, whichelement(ax, pt.x[d]))::UnitRange{Int}
+                             UnitRange(clamp.((minimum(rng), maximum(rng)+1), 1, length(ax))...)
+                         end)
     end
 end
-@inline function neighbor_range(x_min::Real, Δx::Real, x::Real, lp::Real)
-    @inbounds begin
-        start = surroundings(x_min, Δx, x - (Δx + lp))[2]
-        stop  = surroundings(x_min, Δx, x + (Δx + lp))[1]
-        return (start, stop)
-    end
-end
-@inline function surroundings(x_min::Real, Δx::Real, x::Real)
-    i = floor(Int, (x - x_min) / Δx) + 1
-    return (i, i+1)
+@inline function whichelement(ax::LinRange{<: Real}, x::Real)
+    floor(Int, (x - minimum(ax)) / step(ax)) + 1
 end
 
 @inline reset!(grid::Grid) = reset!.(grid)
 
 function generatepoints(f::Function,
-                        grid::Grid{dim, T, interp},
+                        grid::Grid{interp, dim, T},
                         domain::AbstractMatrix{<: Real},
                         npts::Vararg{Int, dim}) where {dim, T, interp}
     # find indices of `grid.axs` from given domain
@@ -143,7 +129,7 @@ end
     push!(grid.neumanns, BoundaryCondition(bound, nodeinds))
 end
 
-@generated function update_dirichlet!(grid::Grid{dim, T}, tspan::Tuple{T, T}) where {dim, T}
+@generated function update_dirichlet!(grid::Grid{interp, dim, T}, tspan::Tuple{T, T}) where {interp, dim, T}
     return quote
         @inbounds t = tspan[1]
         for node in grid

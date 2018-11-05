@@ -11,7 +11,7 @@
             else # isa(alg, USL)
                 dt = 0.005 # Small time increment should be used in USL for a single particle problem
             end
-            grid = @inferred generategrid(T[0 L], 1; interpolation = Tent())
+            grid = @inferred generategrid(Tent(), T[0 L], 1)
             add!(node -> node[1] == 0.0, grid, DirichletBoundary((node, t) -> (FIXED,)))
             points = @inferred generatepoints(x -> MaterialPoint(x = x, ρ₀ = 1, v = Vec(0.1)), grid, T[0 L], 1)
             prob = Problem(grid, (0, 100dt)) do pt, dt
@@ -46,7 +46,7 @@
             else # isa(alg, USL)
                 dt = 0.005 # Small time increment should be used in USL for a single particle problem
             end
-            grid = @inferred generategrid(T[0 H/10; 0 H], 1, 10; interpolation = Tent())
+            grid = @inferred generategrid(Tent(), T[0 H/10; 0 H], 1, 10)
             points = @inferred generatepoints(x -> MaterialPoint(x = x, ρ₀ = 1), grid, T[0 H/10; 9H/10 H], 1, 1)
             prob = Problem(grid, (0, 100dt); gravity = Vec(0, -9.81)) do pt, dt
                 dϵ = dt * symmetric(pt.L)

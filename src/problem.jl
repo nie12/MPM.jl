@@ -1,11 +1,11 @@
 mutable struct Problem{dim, T, interp}
     update_stress!::Function
-    grid::Grid{dim, T, interp}
+    grid::Grid{interp, dim, T}
     tspan::Tuple{T, T}
     gravity::Vec{dim, T}
 end
 
-function Problem(update_stress!, grid::Grid{dim, T}, tspan::Tuple{Real,Real}; gravity = false) where {dim, T}
+function Problem(update_stress!, grid::Grid{interp, dim, T}, tspan::Tuple{Real,Real}; gravity = false) where {interp, dim, T}
     Problem(update_stress!,
             grid,
             map(T, tspan),
