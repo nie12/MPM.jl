@@ -5,9 +5,10 @@
             L = one(T)
             xp = rand(T)
             lp = rand(T)
-            @test MPM.derivative(interp, xv, L, xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(interp, xv, L, xp, lp), xp)
-            @test MPM.derivative(interp, xv, L,  L + xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(interp, xv, L,  L + xp, lp),  xp)
-            @test MPM.derivative(interp, xv, L, -L - xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(interp, xv, L, -L + xp, lp), -xp)
+            shape = MPM.LineShape{interp, T}(xv, L)
+            @test MPM.derivative(shape, xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(shape, xp, lp), xp)
+            @test MPM.derivative(shape,  L + xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(shape,  L + xp, lp),  xp)
+            @test MPM.derivative(shape, -L - xp, lp) ≈ TensorArrays.gradient(xp -> MPM.value(shape, -L + xp, lp), -xp)
         end
     end
 end
@@ -18,7 +19,8 @@ end
             xi = zero(T)
             L = 2 * one(T)
             x = rand(T)
-            N = ShapeFunction{Tent}(Vec(xi), Vec(L))
+            shape = MPM.LineShape{Tent, T}(xi, L)
+            N = ShapeFunction((shape,))
             @test (@inferred N(MaterialPoint(x =  Vec(x), ρ₀ = 1)))::T ≈ 1 - x / L
             @test (@inferred N(MaterialPoint(x = -Vec(x), ρ₀ = 1)))::T ≈ 1 - x / L
             @test (@inferred N'(MaterialPoint(x =  Vec(x), ρ₀ = 1)))::Vec{1, T} ≈ Vec(-1 / L)

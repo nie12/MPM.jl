@@ -12,7 +12,7 @@ end
 end
 
 @inline Base.size(::Node{dim}) where {dim} = (dim,)
-@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.N.x[i]
+@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.N.shapes[i].x
 
 @inline function reset!(node::Node{dim, T}) where {dim, T}
     node.m = zero(T)

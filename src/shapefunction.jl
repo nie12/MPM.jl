@@ -4,26 +4,9 @@
 
 abstract type Interpolation end
 
-# Tent
-# ----
-
 struct Tent <: Interpolation end
 
-@inline function value(::Type{Tent}, xv::Real, L::Real, xp::Real, lp::Real)
-    d = abs(xp - xv)
-    d < L ? 1 - d/L : zero(d)
-end
-@inline function derivative(::Type{Tent}, xv::Real, L::Real, xp::Real, lp::Real)
-    d = abs(xp - xv)
-    sgn = sign(xp - xv)
-    d < L ? -sgn / L : zero(d)
-end
-
 @inline update_particle_domain!(pt::MaterialPoint, ::Type{Tent}) = nothing
-
-
-# uGIMP, cpGIMP
-# -------------
 
 abstract type GIMP <: Interpolation end
 struct uGIMP  <: GIMP end
@@ -43,7 +26,32 @@ struct cpGIMP <: GIMP end
     end
 end
 
-@inline function value(::Type{<: GIMP}, xv::Real, L::Real, xp::Real, lp::Real)
+
+#############
+# LineShape #
+#############
+
+struct LineShape{interp <: Interpolation, T}
+    x::T
+    L::T
+end
+
+@inline function derivative(shape::LineShape, xp::Real, lp::Real)
+    dxp = TensorArrays.dualize(xp)
+    TensorArrays.extract_gradient(value(shape, dxp, lp), xp)
+    # gradient(xp -> value(shape, xp, lp), xp) # This simple code is really slow when `LineShape` is mutable struct
+end
+
+@inline function value(shape::LineShape{Tent}, xp::Real, lp::Real)
+    xv = shape.x
+    L = shape.L
+    d = abs(xp - xv)
+    d < L ? 1 - d/L : zero(d)
+end
+
+@inline function value(shape::LineShape{<: GIMP}, xp::Real, lp::Real)
+    xv = shape.x
+    L = shape.L
     bounds = (xp - lp - xv, xp + lp - xv)
     lhs = clamp.(bounds, -L, 0)
     rhs = clamp.(bounds,  0, L)
@@ -53,27 +61,25 @@ end
     end
     return A / 2lp
 end
-@inline function derivative(::Type{interp}, xv::Real, L::Real, xp::Real, lp::Real) where {interp <: GIMP}
-    gradient(xp -> value(interp, xv, L, xp, lp), xp)
-end
 
 
 #################
 # ShapeFunction #
 #################
 
-struct ShapeFunction{interp <: Interpolation, dim, T}
-    x::Vec{dim, T}
-    L::Vec{dim, T}
+struct ShapeFunction{interp <: Interpolation, dim, T} <: AbstractVector{LineShape{interp, dim}}
+    shapes::NTuple{dim, LineShape{interp, T}}
 end
-@inline ShapeFunction{interp}(x::Vec{dim, T}, L::Vec{dim, T}) where {interp, dim, T} = ShapeFunction{interp, dim, T}(x, L)
+
+@inline Base.size(N::ShapeFunction) = length(N.shapes)
+@inline @propagate_inbounds Base.getindex(N::ShapeFunction, i::Int) = N.shapes[i]
 
 @inline (N::ShapeFunction{interp, dim})(pt::MaterialPoint{dim}) where {interp, dim} = prod(apply(N, pt))
 
 @generated function apply(N::ShapeFunction{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
     return quote
         @_inline_meta
-        @inbounds @ntuple $dim i -> value(interp, N.x[i], N.L[i], pt.x[i], pt.lp[i])
+        @inbounds @ntuple $dim i -> value(N[i], pt.x[i], pt.lp[i])
     end
 end
 
@@ -90,7 +96,7 @@ end
 @generated function apply(∇N::GradientShapeFunction{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
     return quote
         @_inline_meta
-        @inbounds @ntuple $dim i -> derivative(interp, ∇N.body.x[i], ∇N.body.L[i], pt.x[i], pt.lp[i])
+        @inbounds @ntuple $dim i -> derivative(∇N.body[i], pt.x[i], pt.lp[i])
     end
 end
 

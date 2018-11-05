@@ -46,7 +46,10 @@ function generategrid(domain::AbstractMatrix{<: Real},
     axs = generateaxs(domain, nnodes)
     T = eltype(eltype(axs))
     nodes = map(CartesianIndices(nnodes)) do cartesian
-        N = ShapeFunction{interp}(Vec(getindex.(axs, Tuple(cartesian))), Vec(step.(axs)))
+        N = ShapeFunction(ntuple(Val(dim)) do d
+                              ax = axs[d]
+                              LineShape{interp, T}(ax[cartesian[d]], step(axs[d]))
+                          end)
         return Node(N)
     end
     Grid{dim, T, interp}(axs, nodes,
