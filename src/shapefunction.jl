@@ -68,9 +68,14 @@ end
 @inline function value(shape::LineShape{<: GIMP}, xp::Real, lp::Real)
     xv = shape.x
     L = shape.L
-    bounds = (xp - lp - xv, xp + lp - xv)
-    lhs = clamp.(bounds, -L, 0)
-    rhs = clamp.(bounds,  0, L)
+    plhs = (xp - lp) - xv
+    prhs = (xp + lp) - xv
+    # skip the particle beyond the boundary
+    (shape.dirichlet == LFIXED && plhs < -L) && return zero(plhs)
+    (shape.dirichlet == RFIXED && prhs >  L) && return zero(prhs)
+    # computed domains of left and right hand sides
+    lhs = clamp.((plhs, prhs), -L, 0)
+    rhs = clamp.((plhs, prhs),  0, L)
     A = @inbounds begin
         (2 + (lhs[1] + lhs[2])/L) * (lhs[2]-lhs[1]) / 2 +
         (2 - (rhs[1] + rhs[2])/L) * (rhs[2]-rhs[1]) / 2
