@@ -65,7 +65,7 @@ function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: Ma
     @inbounds dt = tspan[2] - tspan[1]
     grid = prob.grid
 
-    for pt in pts
+    for (iₚ, pt) in enumerate(pts)
         L = zero(pt.L)
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
@@ -77,7 +77,7 @@ function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: Ma
         end
         pt.L = L
         pt.F += dt*L ⋅ pt.F
-        prob.update_stress!(pt, dt) # TODO: consider better way to avoid type instability
+        apply(prob.update_stress!, iₚ, pt, dt)
         update_particle_domain!(pt, interp)
     end
 end
