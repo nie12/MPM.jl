@@ -58,12 +58,12 @@ end
 @generated function neighbor_nodeindices(grid::Grid{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
     return quote
         @_inline_meta
-        CartesianIndices(@inbounds @ntuple $dim d -> begin
-                             ax = grid.axs[d]
-                             rng = neighbor_element(interp, whichelement(ax, pt.x[d]))::UnitRange{Int}
-                             UnitRange(clamp.((minimum(rng), maximum(rng)+1), 1, length(ax))...)
-                         end)
+        CartesianIndices(@inbounds @ntuple $dim d -> neighbor_range(interp, grid.axs[d], pt.x[d]))
     end
+end
+@inline function neighbor_range(::Type{interp}, ax::LinRange, x::Real) where {interp <: Interpolation}
+    rng = neighbor_element(interp, whichelement(ax, x))::UnitRange{Int}
+    return UnitRange(clamp.((minimum(rng), maximum(rng)+1), 1, length(ax))...)
 end
 @inline function whichelement(ax::LinRange{<: Real}, x::Real)
     floor(Int, (x - minimum(ax)) / step(ax)) + 1
