@@ -13,6 +13,7 @@ end
 
 @inline Base.size(::Node{dim}) where {dim} = (dim,)
 @inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.N.shapes[i].x
+@inline getdirichlet(node::Node) = getdirichlet(node.N)
 
 @inline function reset!(node::Node{dim, T}) where {dim, T}
     node.m = zero(T)

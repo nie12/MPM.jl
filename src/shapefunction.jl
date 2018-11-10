@@ -15,17 +15,13 @@ struct cpGIMP <: GIMP end
 
 @inline neighbor_element(::Type{<: GIMP}, i::Int) = i-1:i+1
 @inline update_particle_domain!(pt::MaterialPoint, ::Type{uGIMP}) = nothing
-@generated function update_particle_domain!(pt::MaterialPoint{dim}, ::Type{cpGIMP}) where {dim}
+@inline function update_particle_domain!(pt::MaterialPoint{dim, T}, ::Type{cpGIMP}) where {dim, T}
     # Charlton, T. J., W. M. Coombs, and C. E. Augarde.
     # "iGIMP: an implicit generalised interpolation material point method for large deformations."
     # Computers & Structures 190 (2017): 108-125.
     # Eq. (39)
-    return quote
-        @_inline_meta
-        U² = pt.F' ⋅ pt.F
-        @inbounds pt.lp = Vec(@ntuple $dim i -> pt.lp₀[i] * √U²[i,i])
-        # @inbounds pt.lp = Vec(@ntuple $dim i -> pt.lp₀[i] * pt.F[i,i]) # this is original
-    end
+    U² = pt.F' ⋅ pt.F
+    pt.lp = Vec{dim, T}(i -> pt.lp₀[i] * √U²[i,i])
 end
 
 
@@ -52,10 +48,15 @@ end
     LineShape{interp, T}(x, y, FREE)
 end
 
+# Directly call AD methods because using anonymous function is really slow when `LineShape` is mutable struct
 @inline function derivative(shape::LineShape, xp::Real, lp::Real)
     dxp = TensorArrays.dualize(xp)
     TensorArrays.extract_gradient(value(shape, dxp, lp), xp)
-    # gradient(xp -> value(shape, xp, lp), xp) # This simple code is really slow when `LineShape` is mutable struct
+end
+@inline function derivative(shape::LineShape, xp::Real, lp::Real, ::Symbol)
+    dxp = TensorArrays.dualize(xp)
+    dN = value(shape, dxp, lp)
+    tuple(TensorArrays.extract_gradient(dN, xp), TensorArrays.extract_value(dN, xp))
 end
 
 @inline function value(shape::LineShape{Tent}, xp::Real, lp::Real)
@@ -95,12 +96,10 @@ end
 @inline Base.size(N::ShapeFunction) = length(N.shapes)
 @inline @propagate_inbounds Base.getindex(N::ShapeFunction, i::Int) = N.shapes[i]
 
-@inline (N::ShapeFunction{interp, dim})(pt::MaterialPoint{dim}) where {interp, dim} = prod(apply(N, pt))
-
-@generated function apply(N::ShapeFunction{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
+@generated function (N::ShapeFunction{interp, dim})(pt::MaterialPoint{dim}) where {interp, dim}
     return quote
         @_inline_meta
-        @inbounds @ntuple $dim i -> value(N[i], pt.x[i], pt.lp[i])
+        @inbounds prod(@ntuple $dim i -> value(N[i], pt.x[i], pt.lp[i]))
     end
 end
 
@@ -129,21 +128,20 @@ struct GradientShapeFunction{interp, dim, T}
 end
 @inline LinearAlgebra.adjoint(N::ShapeFunction) = GradientShapeFunction(N)
 
-@generated function apply(∇N::GradientShapeFunction{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}
-    return quote
-        @_inline_meta
-        @inbounds @ntuple $dim i -> derivative(∇N.body[i], pt.x[i], pt.lp[i])
-    end
-end
-
-@generated function (∇N::GradientShapeFunction{interp, dim})(pt::MaterialPoint{dim}) where {interp, dim}
+@generated function (∇N::GradientShapeFunction{interp, dim})(pt::MaterialPoint{dim}, ::Symbol) where {interp, dim}
     exps = map(1:dim) do d
         Expr(:call, :*, [i == d ? :(∇Nᵢ[$i]) : :(Nᵢ[$i]) for i in 1:dim]...)
     end
     return quote
         @_inline_meta
-        Nᵢ = apply(∇N.body, pt)
-        ∇Nᵢ = apply(∇N, pt)
-        @inbounds Vec($(exps...))
+        @inbounds begin
+            @nexprs $dim d -> res_d = derivative(∇N.body[d], pt.x[d], pt.lp[d], :all)
+            ∇Nᵢ = @ntuple $dim d -> res_d[1]
+            Nᵢ = @ntuple $dim d -> res_d[2]
+            return tuple(Vec($(exps...)), prod(Nᵢ))
+        end
     end
+end
+@inline function (∇N::GradientShapeFunction)(pt::MaterialPoint)
+    @inbounds ∇N(pt, :all)[1]
 end

@@ -12,7 +12,7 @@ function Problem(update_stress!, grid::Grid{interp, dim, T}, tspan::Tuple{Real,R
             gravity === missing ? zero(Vec{dim, T}) : convert(Vec{dim, T}, gravity))
 end
 
-@inline function apply(update_stress!::Function, iₚ, pt::MaterialPoint, dt::Real)
+@inline function apply(update_stress!, iₚ, pt::MaterialPoint, dt::Real)
     update_stress!(pt, dt)
 end
 @inline @propagate_inbounds function apply(update_stress!::Array, iₚ, pt::MaterialPoint, dt::Real)

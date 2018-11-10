@@ -4,7 +4,7 @@ struct USF  <: Algorithm end
 struct USL  <: Algorithm end
 struct MUSL <: Algorithm end
 
-function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{T, T}) where {dim, T}
+function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{T, T}) where {dim, T}
     update_dirichlet!(prob.grid, tspan)
     reset!(prob.grid)
     compute_nodal_mass_and_momentum!(prob, pts, tspan)
@@ -12,7 +12,7 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     compute_nodal_force!(prob, pts, tspan)
     update_particle_position_and_velocity!(prob, pts, tspan)
 end
-function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::USL, tspan::Tuple{T, T}) where {dim, T}
+function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, ::USL, tspan::Tuple{T, T}) where {dim, T}
     update_dirichlet!(prob.grid, tspan)
     reset!(prob.grid)
     compute_nodal_mass_and_momentum!(prob, pts, tspan)
@@ -20,7 +20,7 @@ function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim,
     update_particle_position_and_velocity!(prob, pts, tspan)
     update_particle_stress!(prob, pts, tspan)
 end
-function update!(prob::Problem{dim, T}, pts::AbstractArray{<: MaterialPoint{dim, T}}, ::MUSL, tspan::Tuple{T, T}) where {dim, T}
+function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, ::MUSL, tspan::Tuple{T, T}) where {dim, T}
     update_dirichlet!(prob.grid, tspan)
     @inbounds if prob.tspan[1] == tspan[1]
         reset!(prob.grid)
@@ -55,7 +55,7 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
     for bc in grid.dirichlets
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            cond = bc(node, t)
+            cond = getdirichlet(node)
             node.mv = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.mv[i])
         end
     end
@@ -69,8 +69,8 @@ function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: Ma
         L = zero(pt.L)
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
-            N′ = node.N'(pt)
-            if node.m > eps(T)
+            if node.m > √eps(T)
+                N′ = node.N'(pt)
                 v = node.mv / node.m
                 L += v ⊗ N′
             end
@@ -92,10 +92,9 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     for pt in pts
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
-            N = node.N(pt)
-            N′ = node.N'(pt)
-            fint = (-det(pt.F)*pt.m/pt.ρ₀) * pt.σ ⋅ N′
-            fext = (N*pt.m)*prob.gravity
+            N′, N = node.N'(pt, :all)
+            fint = (-det(pt.F) * pt.m / pt.ρ₀) * (pt.σ ⋅ N′)
+            fext = (N * pt.m) * prob.gravity
             node.f += fint + fext
         end
     end
@@ -118,7 +117,7 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
     for bc in grid.dirichlets
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            cond = bc(node, t)
+            cond = getdirichlet(node)
             node.f = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.f[i])
         end
     end
@@ -143,10 +142,10 @@ function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Arra
         v = zero(pt.x)
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
-            N = node.N(pt)
-            if node.m > eps(T)
-                a += N * node.f / node.m
-                v += N * node.mv / node.m
+            if node.m > √eps(T)
+                N = node.N(pt)
+                a += (N / node.m) * node.f
+                v += (N / node.m) * node.mv
             end
         end
         pt.v += dt * a
