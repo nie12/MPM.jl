@@ -11,8 +11,19 @@ end
     return Node(N, m, mv, f)
 end
 
+@generated function Base.getproperty(node::Node{dim, T}, name::Symbol) where {dim, T}
+    return quote
+        @_inline_meta
+        if name == :x
+            return Vec{dim, T}(@inbounds @ntuple $dim d -> node.N.shapes[d].x)
+        else
+            return getfield(node, name)
+        end
+    end
+end
+
 @inline Base.size(::Node{dim}) where {dim} = (dim,)
-@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.N.shapes[i].x
+@inline @propagate_inbounds Base.getindex(node::Node, i::Int) = node.x[i]
 @inline getdirichlet(node::Node) = getdirichlet(node.N)
 
 @inline function reset!(node::Node{dim, T}) where {dim, T}
