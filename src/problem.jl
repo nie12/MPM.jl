@@ -18,3 +18,7 @@ end
 @inline @propagate_inbounds function apply(update_stress!::Array, iₚ, pt::MaterialPoint, dt::Real)
     update_stress![iₚ](pt, dt)
 end
+
+@inline reset_grid!(prob::Problem) = reset!(prob.grid)
+
+@inline update_dirichlet!(prob::Problem, tspan::Tuple) = update_dirichlet!(prob.grid, tspan)

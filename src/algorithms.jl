@@ -5,35 +5,50 @@ struct USL  <: Algorithm end
 struct MUSL <: Algorithm end
 
 function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, ::USF, tspan::Tuple{T, T}) where {dim, T}
-    update_dirichlet!(prob.grid, tspan)
-    reset!(prob.grid)
-    compute_nodal_mass_and_momentum!(prob, pts, tspan)
-    update_particle_stress!(prob, pts, tspan)
-    compute_nodal_force!(prob, pts, tspan)
-    update_particle_position_and_velocity!(prob, pts, tspan)
+    update_dirichlet!(prob, tspan)
+    reset_grid!(prob)
+    materialpoint_to_grid!(prob, pts, tspan)
+    update_materialpoint_stress!(prob, pts, tspan) # update stress first
+    calculate_nodal_force!(prob, pts, tspan)       # calculate nodal force based on the updated stress
+    update_grid!(prob, pts, tspan)
+    grid_to_materialpoint!(prob, pts, tspan)
 end
 function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, ::USL, tspan::Tuple{T, T}) where {dim, T}
-    update_dirichlet!(prob.grid, tspan)
-    reset!(prob.grid)
-    compute_nodal_mass_and_momentum!(prob, pts, tspan)
-    compute_nodal_force!(prob, pts, tspan)
-    update_particle_position_and_velocity!(prob, pts, tspan)
-    update_particle_stress!(prob, pts, tspan)
+    update_dirichlet!(prob, tspan)
+    reset_grid!(prob)
+    materialpoint_to_grid!(prob, pts, tspan)
+    calculate_nodal_force!(prob, pts, tspan)
+    update_grid!(prob, pts, tspan)
+    grid_to_materialpoint!(prob, pts, tspan)
+    update_materialpoint_stress!(prob, pts, tspan) # update stress last
 end
 function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, ::MUSL, tspan::Tuple{T, T}) where {dim, T}
-    update_dirichlet!(prob.grid, tspan)
-    @inbounds if prob.tspan[1] == tspan[1]
-        reset!(prob.grid)
-        compute_nodal_mass_and_momentum!(prob, pts, tspan)
+    # do the same process as USL until `grid_to_materialpoint!`
+    update_dirichlet!(prob, tspan)
+    reset_grid!(prob)
+    materialpoint_to_grid!(prob, pts, tspan)
+    calculate_nodal_force!(prob, pts, tspan)
+    update_grid!(prob, pts, tspan)
+    grid_to_materialpoint!(prob, pts, tspan)
+
+    # recalculate nodal momentum before `update_materialpoint_stress!`
+    grid = prob.grid
+    for node in grid
+        node.mv = zero(Vec{dim, T})
     end
-    compute_nodal_force!(prob, pts, tspan)
-    update_particle_position_and_velocity!(prob, pts, tspan)
-    reset!(prob.grid)
-    compute_nodal_mass_and_momentum!(prob, pts, tspan)
-    update_particle_stress!(prob, pts, tspan)
+    for pt in pts
+        for i in neighbor_nodeindices(grid, pt)
+            @inbounds node = grid[i]
+            N = node.N(pt)
+            node.mv += N * pt.m * pt.v
+        end
+    end
+    impose_dirichlet_on_nodal_momentum!(prob, pts)
+
+    update_materialpoint_stress!(prob, pts, tspan)
 end
 
-function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+function materialpoint_to_grid!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
     @inbounds t = tspan[1]
     grid = prob.grid
 
@@ -49,19 +64,10 @@ function compute_nodal_mass_and_momentum!(prob::Problem{dim, T}, pts::Array{<: M
         end
     end
 
-    #=
-    Modify nodal momentum for fixed boundary condition
-    =#
-    for bc in grid.dirichlets
-        for i in nodeindices(bc)
-            @inbounds node = grid[i]
-            cond = getdirichlet(node)
-            node.mv = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.mv[i])
-        end
-    end
+    impose_dirichlet_on_nodal_momentum!(prob, pts)
 end
 
-function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {interp, dim, T}
+function update_materialpoint_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {interp, dim, T}
     @inbounds dt = tspan[2] - tspan[1]
     grid = prob.grid
 
@@ -82,7 +88,7 @@ function update_particle_stress!(prob::Problem{dim, T, interp}, pts::Array{<: Ma
     end
 end
 
-function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+function calculate_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
     @inbounds t = tspan[1]
     grid = prob.grid
 
@@ -110,29 +116,20 @@ function compute_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint
         end
     end
 
-    #=
-    Modify nodal force for fixed boundary condition
-    (assume that acceleration is zero)
-    =#
-    for bc in grid.dirichlets
-        for i in nodeindices(bc)
-            @inbounds node = grid[i]
-            cond = getdirichlet(node)
-            node.f = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.f[i])
-        end
-    end
+    impose_dirichlet_on_nodal_force!(prob, pts)
 end
 
-function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+function update_grid!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
     @inbounds dt = tspan[2] - tspan[1]
     grid = prob.grid
-
-    #=
-    Update nodal momentum
-    =#
     for node in grid
         node.mv += dt * node.f
     end
+end
+
+function grid_to_materialpoint!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, tspan::Tuple{T, T}) where {dim, T}
+    @inbounds dt = tspan[2] - tspan[1]
+    grid = prob.grid
 
     #=
     Update velocity and position for material points
@@ -150,5 +147,27 @@ function update_particle_position_and_velocity!(prob::Problem{dim, T}, pts::Arra
         end
         pt.v += dt * a
         pt.x += dt * v
+    end
+end
+
+function impose_dirichlet_on_nodal_momentum!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}) where {dim, T}
+    grid = prob.grid
+    for bc in grid.dirichlets
+        for i in nodeindices(bc)
+            @inbounds node = grid[i]
+            cond = getdirichlet(node)
+            node.mv = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.mv[i])
+        end
+    end
+end
+
+function impose_dirichlet_on_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}) where {dim, T}
+    grid = prob.grid
+    for bc in grid.dirichlets
+        for i in nodeindices(bc)
+            @inbounds node = grid[i]
+            cond = getdirichlet(node)
+            node.f = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.f[i]) # assume that acceleration is zero
+        end
     end
 end
