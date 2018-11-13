@@ -103,12 +103,14 @@ end
     end
 end
 
-@generated function setdirichlet!(N::ShapeFunction{interp, dim}, dirichlets::NTuple{dim, Dirichlet}) where {interp, dim}
-    return quote
-        @_inline_meta
-        @inbounds @nexprs $dim d -> N.shapes[d].dirichlet = dirichlets[d]
-        nothing
+@inline function setdirichlet!(N::ShapeFunction{interp, dim}, dirichlets::NTuple{dim, Dirichlet}) where {interp, dim}
+    @inbounds for d in 1:dim
+        N.shapes[d].dirichlet = dirichlets[d]
     end
+    return dirichlets
+end
+@inline @propagate_inbounds function getdirichlet(N::ShapeFunction, i::Int)
+    N.shapes[i].dirichlet
 end
 
 @generated function getdirichlet(N::ShapeFunction{interp, dim}) where {interp, dim}
@@ -116,6 +118,9 @@ end
         @_inline_meta
         @inbounds @ntuple $dim d -> N.shapes[d].dirichlet
     end
+end
+@inline @propagate_inbounds function setdirichlet!(N::ShapeFunction, dirichlet::Dirichlet, i::Int)
+    N.shapes[i].dirichlet = dirichlet
 end
 
 

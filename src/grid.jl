@@ -131,16 +131,26 @@ end
 
 @generated function update_dirichlet!(grid::Grid{interp, dim, T}, tspan::Tuple{T, T}) where {interp, dim, T}
     return quote
-        @inbounds t = tspan[1]
-        for node in grid
-            setdirichlet!(node.N, @ntuple $dim d -> FREE)
-        end
-        for bc in grid.dirichlets
-            for i in nodeindices(bc)
-                @inbounds node = grid[i]
-                cond = bc(node, t)
-                current = getdirichlet(node.N)
-                setdirichlet!(node.N, @inbounds @ntuple $dim d -> cond[d] * current[d])
+        @inbounds begin
+            t = tspan[1]
+            for node in grid, d in 1:dim
+                setdirichlet!(node.N, FREE, d)
+            end
+            for bc in grid.dirichlets, i in nodeindices(bc)
+                cond = bc(grid[i], t)
+                @nexprs $dim d -> begin
+                    if cond[d] == FIXED
+                        unit = CartesianIndex(@ntuple $dim i -> i == d ? 1 : 0)
+                        for drc in (LFIXED, FIXED, RFIXED)
+                            j = i + Int(drc) * unit
+                            if checkbounds(Bool, grid, j)
+                                node = grid[j]
+                                dirichlet = drc * getdirichlet(node.N, d)
+                                setdirichlet!(node.N, dirichlet, d)
+                            end
+                        end
+                    end
+                end
             end
         end
     end
