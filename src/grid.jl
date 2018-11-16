@@ -49,10 +49,34 @@ julia> generategrid([0 1; 0 2], 2, 4)
  [1.0, 0.0]  [1.0, 0.5]  [1.0, 1.0]  [1.0, 1.5]  [1.0, 2.0]
 ```
 """
-function generategrid(::interp, domain::AbstractMatrix{<: Real}, nelts::Vararg{Int, dim}) where {interp, dim}
-    nnodes = map(i -> i + 1, nelts)
-    axs = generateaxs(domain, nnodes)
-    return Grid{interp}(axs)
+@generated function generategrid(::interp,
+                                 domains::Vararg{<: Vector{<: Real}, dim};
+                                 nelements::Union{Missing, NTuple{dim, Int}} = missing,
+                                 uniform::Union{Missing, NTuple{dim, Int}} = missing) where {interp, dim}
+    return quote
+        @assert @nall $dim d -> length(domains[d]) == 2
+        @assert ismissing(nelements) ⊻ ismissing(uniform)
+        if ismissing(nelements)
+            xs = @ntuple $dim d -> (domains[d][2] - domains[d][1])
+            nelements = least_common_ndivs(xs...)
+            c = 1
+            while true
+                if @nall $dim d -> uniform[d] ≤ c * nelements[d]
+                    break
+                else
+                    c += 1
+                end
+            end
+            nelements = c .* nelements
+        end
+        axs = generateaxs(hcat(domains...)', nelements .+ 1)
+        return Grid{interp}(axs)
+    end
+end
+
+function least_common_ndivs(xs::Real...)
+    c = gcd_float(promote(xs...)...)
+    return map(x -> round(Int, x/c), xs)
 end
 
 @generated function neighbor_nodeindices(grid::Grid{interp, dim}, pt::MaterialPoint{dim}) where {interp, dim}

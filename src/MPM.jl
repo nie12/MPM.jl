@@ -1,7 +1,7 @@
 module MPM
 
 using Base: @propagate_inbounds, @_inline_meta
-using Base.Cartesian: @ntuple, @nexprs
+using Base.Cartesian: @ntuple, @nexprs, @nall
 using LinearAlgebra
 using TensorArrays
 using RecipesBase
