@@ -1,5 +1,5 @@
 @testset "Interpolation" begin
-    for interp in (Tent,)
+    for interp in (Tent, CubicBSpline,)
         for T in (Float64, Float32), _ in 1:100
             ax = LinRange{T}(0, 1, 5)
             L = step(ax)
@@ -14,7 +14,7 @@
             @test sum(MPM.derivative(shapes[i], xp, lp) for i in MPM.neighbor_range(interp, ax, xp)) ≈ 0 atol=1e-5
         end
     end
-    for interp in (Tent, uGIMP,)
+    for interp in (Tent, uGIMP, CubicBSpline)
         for T in (Float64, Float32), _ in 1:100
             xv = rand(T)
             L = one(T)

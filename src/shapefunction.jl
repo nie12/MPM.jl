@@ -24,6 +24,11 @@ struct cpGIMP <: GIMP end
     pt.lp = Vec{dim, T}(i -> pt.lp₀[i] * √U²[i,i])
 end
 
+struct BSpline{degree} <: Interpolation end
+const CubicBSpline = BSpline{3}
+
+@inline neighbor_element(::Type{<: BSpline}, i::Int) = i-1:i+1
+@inline update_particle_domain!(pt::MaterialPoint, ::Type{<: BSpline}) = nothing
 
 #############
 # LineShape #
@@ -62,8 +67,8 @@ end
 @inline function value(shape::LineShape{Tent}, xp::Real, lp::Real)
     xv = shape.x
     L = shape.L
-    d = abs(xp - xv)
-    d < L ? 1 - d/L : zero(d)
+    ξ = abs(xp - xv) / L
+    ξ < 1 ? 1 - ξ : zero(ξ)
 end
 
 @inline function value(shape::LineShape{<: GIMP}, xp::Real, lp::Real)
@@ -82,6 +87,27 @@ end
         (2 - (rhs[1] + rhs[2])/L) * (rhs[2]-rhs[1]) / 2
     end
     return A / 2lp
+end
+
+@inline function value(shape::LineShape{CubicBSpline}, xp::Real, lp::Real)
+    xv = shape.x
+    L = shape.L
+    ξ = (xp - xv) / L
+    if shape.dirichlet == FREE
+        ξ = abs(ξ)
+        return ξ < 1 ? ξ^3/2 - ξ^2 + 2/3 :
+               ξ < 2 ? (2 - ξ)^3 / 6     : zero(ξ)
+    elseif shape.dirichlet == RFIXED || shape.dirichlet == LFIXED
+        ξ = Int(shape.dirichlet) * ξ
+        return ξ < -1 ? zero(ξ)                      :
+               ξ <  0 ? (1 + ξ)^2 * (7 - 11ξ) / 12   :
+               ξ <  1 ? (7ξ^3 - 15ξ^2 + 3ξ + 7) / 12 :
+               ξ <  2 ? (2 - ξ)^3 / 6                : zero(ξ)
+    else # elseif shape.dirichlet == FIXED
+        ξ = abs(ξ)
+        return ξ < 1 ? (3ξ^3 - 6ξ^2 + 4) / 4 :
+               ξ < 2 ? (2 - ξ)^3 / 4         : zero(ξ)
+    end
 end
 
 
