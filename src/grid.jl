@@ -157,8 +157,8 @@ end
     return quote
         @inbounds begin
             t = tspan[1]
-            for node in grid, d in 1:dim
-                setdirichlet!(node.N, FREE, d)
+            for node in grid
+                setdirichlet!(node.N, @ntuple $dim d -> FREE)
             end
             for bc in grid.dirichlets, i in nodeindices(bc)
                 cond = bc(grid[i], t)

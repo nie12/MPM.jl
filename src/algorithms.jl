@@ -168,8 +168,7 @@ function impose_neumann!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim,
     for bc in grid.neumanns
         for i in nodeindices(bc)
             @inbounds node = grid[i]
-            f = bc(node, t)
-            node.f += Vec{dim, T}(i -> f[i] === missing ? node.f[i] : f[i])
+            node.f = bc(node, t)
         end
     end
 end

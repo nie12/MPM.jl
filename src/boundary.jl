@@ -19,6 +19,6 @@ end
     bc.bound.f(node, t)::NTuple{dim, Dirichlet}
 end
 
-@inline function (bc::BoundaryCondition{NeumannBoundary, dim})(node::Node{dim}, t::Real) where {dim}
-    bc.bound.f(node, t)::NTuple{dim, Real}
+@inline function (bc::BoundaryCondition{NeumannBoundary, dim})(node::Node{dim, T}, t::Real) where {dim, T}
+    bc.bound.f(node, t)::Vec{dim, T}
 end
