@@ -97,26 +97,22 @@ end
 
 function generatepoints(f::Function,
                         grid::Grid{interp, dim, T},
-                        domain::AbstractMatrix{<: Real},
-                        npts::Vararg{Int, dim}) where {dim, T, interp}
+                        domains::Vararg{<: Vector{<: Real}, dim};
+                        npoints::NTuple{dim, Int} = missing) where {dim, T, interp}
     # find indices of `grid.axs` from given domain
-    domaininds = Array{Int}(undef, size(domain))
-    map!(domaininds, CartesianIndices(domain)) do cartesian
-        ax = grid.axs[cartesian[1]]
-        if cartesian[2] == 1
-            return findfirst(x -> x ≥ domain[cartesian], ax)
-        elseif cartesian[2] == 2
-            return length(ax) - findfirst(x -> x ≤ domain[cartesian], reverse(ax)) + 1
-        end
+    domaininds = map(domains, grid.axs) do domain, ax
+        start::Int = findfirst(x -> x ≥ domain[1], ax)
+        stop::Int = length(ax) - findfirst(x -> x ≤ domain[2], reverse(ax)) + 1
+        return [start, stop]
     end
-    axs = ntuple(Val(dim)) do d
+    axs = map(domaininds, grid.axs, npoints) do inds, gax, np
         # extract axs where material points should be generated
-        ax = grid.axs[d][domaininds[d,1]:domaininds[d,2]]
-        out = Vector{eltype(ax)}(undef, (length(ax)-1)*npts[d])
+        ax = gax[inds[1]:inds[2]]
+        out = Vector{eltype(ax)}(undef, (length(ax)-1)*np)
         count = 1
         for i in 1:length(ax)-1
             # divide 1D cell by number of sub-domain
-            rng = LinRange(ax[i], ax[i+1], npts[d]+1)
+            rng = LinRange(ax[i], ax[i+1], np+1)
             for j in 1:length(rng)-1
                 # material point should be located at the center of sub-domain
                 out[count] = (rng[j] + rng[j+1]) / 2
@@ -133,11 +129,11 @@ function generatepoints(f::Function,
     end
     # initialize material point mass `m` and particle size `lp`
     V = prod(step.(grid.axs))
-    Vₚ = V / prod(npts)
+    Vₚ = V / prod(npoints)
     for pt in pts
         pt.m = pt.ρ₀ * Vₚ
         if interp <: GIMP
-            pt.lp₀ = Vec(map(/, step.(grid.axs), 2 .* npts))
+            pt.lp₀ = Vec(map(/, step.(grid.axs), 2 .* npoints))
             pt.lp = pt.lp₀
         end
     end
