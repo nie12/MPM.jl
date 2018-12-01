@@ -98,8 +98,7 @@ function calculate_nodal_force!(prob::Problem{dim, T}, pts::Array{<: MaterialPoi
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
             N′, N = node.N'(pt, :all)
-            Vp = det(pt.F) * pt.m / pt.ρ₀
-            fint = -Vp * (pt.σ ⋅ N′)
+            fint = -pt.V * (pt.σ ⋅ N′)
             fext = (N * pt.m) * prob.gravity
             node.f += fint + fext
         end

@@ -61,6 +61,18 @@ end
     end
 end
 
+@inline function Base.getproperty(pt::MaterialPoint, name::Symbol)
+    if name == :V
+        F = getfield(pt, :F)
+        m = getfield(pt, :m)
+        ρ₀ = getfield(pt, :ρ₀)
+        V₀ = m / ρ₀
+        return V₀ * det(F)
+    else
+        return getfield(pt, name)
+    end
+end
+
 @inline Base.:+(pt::MaterialPoint) = pt
 @generated function Base.:-(pt::MaterialPoint)
     exps = [:(-pt.$name) for name in fieldnames(MaterialPoint)]
