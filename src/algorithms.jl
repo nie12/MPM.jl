@@ -34,16 +34,23 @@ function update!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}, al
     # recalculate nodal momentum before `update_materialpoint_stress!`
     grid = prob.grid
     for node in grid
-        node.mv = zero(Vec{dim, T})
+        node.v = zero(Vec{dim, T})
     end
     for pt in pts
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
             N = node.N(pt)
-            node.mv += N * pt.m * pt.v
+            node.v += N * pt.m * pt.v
         end
     end
-    impose_dirichlet_on_nodal_momentum!(prob, pts)
+    for node in grid
+        if node.m > √eps(T)
+            node.v = node.v / node.m
+        else
+            node.v = zero(node.v)
+        end
+    end
+    impose_dirichlet_on_nodal_velocity!(prob, pts)
 
     update_materialpoint_stress!(prob, pts, alg, tspan)
 end
@@ -60,11 +67,18 @@ function materialpoint_to_grid!(prob::Problem{dim, T}, pts::Array{<: MaterialPoi
             @inbounds node = grid[i]
             N = node.N(pt)
             node.m += N * pt.m
-            node.mv += N * pt.m * pt.v
+            node.v += N * pt.m * pt.v
+        end
+    end
+    for node in grid
+        if node.m > √eps(T)
+            node.v = node.v / node.m
+        else
+            node.v = zero(node.v)
         end
     end
 
-    impose_dirichlet_on_nodal_momentum!(prob, pts)
+    impose_dirichlet_on_nodal_velocity!(prob, pts)
 end
 
 function update_materialpoint_stress!(prob::Problem{dim, T, interp}, pts::Array{<: MaterialPoint{dim, T}}, ::Algorithm, tspan::Tuple{T, T}) where {interp, dim, T}
@@ -75,11 +89,8 @@ function update_materialpoint_stress!(prob::Problem{dim, T, interp}, pts::Array{
         L = zero(pt.L)
         for i in neighbor_nodeindices(grid, pt)
             @inbounds node = grid[i]
-            if node.m > √eps(T)
-                N′ = node.N'(pt)
-                v = node.mv / node.m
-                L += v ⊗ N′
-            end
+            N′ = node.N'(pt)
+            L += node.v ⊗ N′
         end
         pt.L = L
         pt.F += dt*L ⋅ pt.F
@@ -112,7 +123,11 @@ function update_nodal_momentum!(prob::Problem{dim, T}, pts::Array{<: MaterialPoi
     @inbounds dt = tspan[2] - tspan[1]
     grid = prob.grid
     for node in grid
-        node.mv += dt * node.f
+        if node.m > √eps(T)
+            node.v = node.v + dt * (node.f / node.m)
+        else
+            node.v = zero(node.v)
+        end
     end
 end
 
@@ -131,7 +146,7 @@ function grid_to_materialpoint!(prob::Problem{dim, T}, pts::Array{<: MaterialPoi
             if node.m > √eps(T)
                 N = node.N(pt)
                 a += (N / node.m) * node.f
-                v += (N / node.m) * node.mv
+                v += N * node.v
             end
         end
         pt.v += dt * a
@@ -139,13 +154,13 @@ function grid_to_materialpoint!(prob::Problem{dim, T}, pts::Array{<: MaterialPoi
     end
 end
 
-function impose_dirichlet_on_nodal_momentum!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}) where {dim, T}
+function impose_dirichlet_on_nodal_velocity!(prob::Problem{dim, T}, pts::Array{<: MaterialPoint{dim, T}}) where {dim, T}
     grid = prob.grid
     for bc in grid.dirichlets
         for i in nodeindices(bc)
             @inbounds node = grid[i]
             cond = getdirichlet(node)
-            node.mv = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.mv[i])
+            node.v = Vec{dim, T}(i -> cond[i] == FIXED ? zero(T) : node.v[i])
         end
     end
 end

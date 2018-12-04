@@ -7,7 +7,7 @@
 
         @inferred (grid -> grid[1].N)(grid)
         @inferred (grid -> grid[1].m)(grid)
-        @inferred (grid -> grid[1].mv)(grid)
+        @inferred (grid -> grid[1].v)(grid)
         @inferred (grid -> grid[1].f)(grid)
         @test (@inferred (grid -> grid[1].x)(grid))::Vec{1, T} == zero(Vec{1, T})
 
@@ -18,7 +18,7 @@
 
         @inferred (grid -> grid[1].N)(grid)
         @inferred (grid -> grid[1].m)(grid)
-        @inferred (grid -> grid[1].mv)(grid)
+        @inferred (grid -> grid[1].v)(grid)
         @inferred (grid -> grid[1].f)(grid)
         @test (@inferred (grid -> grid[1].x)(grid))::Vec{2, T} == zero(Vec{2, T})
     end
